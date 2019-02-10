@@ -307,7 +307,6 @@ struct Cells
 
 			std::vector<size_t> cell_index = foldIndex(i, as<std::vector<size_t>>(shape()));
 			auto& connections = connections_[i];
-			assert(connections.size() == permence.size());
 
 			for(const auto& input : all_on_bits) {
 				if(std::find_if(connections.begin(), connections.end(), [&input](const auto& a) {
@@ -339,6 +338,25 @@ struct Cells
 				connections[i] = foldIndex(connection_indices[i], shape());
 			}
 
+		}
+	}
+
+	void decaySynapse(float thr)
+	{
+		assert(connections_.size() == permence_.size());
+		for(size_t i=0;i<connections_.size();i++) {
+			std::vector<size_t> remove_id;
+			auto& connections = connections_[i];
+			auto& permence = permence_[i];
+
+			for(size_t i=0;i<connections.size();i++) {
+				if(permence[i] < thr)
+					remove_id.push_back(i);
+			}
+			connections.erase(std::remove_if(connections.begin(), connections.end()
+				, [&](const auto& a){return remove_id[&a - connections.data()];}), connections.end());
+			permence.erase(std::remove_if(permence.begin(), permence.end()
+				, [&](const auto& a){return remove_id[&a - permence.data()];}), permence.end());
 		}
 	}
 
