@@ -17,3 +17,6 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -Wno-odr")
 include_directories(./)
 
 add_subdirectory(examples)
+
+file(GLOB_RECURSE headers "tiny_htm/*.hpp")
+install(FILES ${headers} DESTINATION "include/tiny_htm/")
