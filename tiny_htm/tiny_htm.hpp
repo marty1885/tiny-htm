@@ -154,9 +154,8 @@ inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
 	size_t v = 1;
 	assert(index.size() == shape.size());
 	for(size_t i=0;i<index.size();i++) {
-		size_t n = v * (i==0? 1 : index[i-1]);
-		s += n;
-		v *= shape[i];
+		v *= (i==0?1:shape[i-1]);
+		s += index[i] * v;
 	}
 
 	return s;
@@ -330,13 +329,13 @@ struct Cells
 			connection_indices.reserve(connections.size());
 			for(const auto& c : connections)
 				connection_indices.push_back(unfoldIndex(c, shape()));
-			auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
-			connection_indices = apply_permutation(connection_indices, p);
-			permence = apply_permutation(permence, p);
+			//auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
+			//connection_indices = apply_permutation(connection_indices, p);
+			//permence = apply_permutation(permence, p);
 
-			for(size_t i=0;i<connection_indices.size();i++) {
+			assert(connection_indices.size() == connections.size());
+			for(size_t i=0;i<connection_indices.size();i++)
 				connections[i] = foldIndex(connection_indices[i], shape());
-			}
 
 		}
 	}
