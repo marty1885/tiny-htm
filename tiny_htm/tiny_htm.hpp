@@ -162,7 +162,7 @@ inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
 	return s;
 }
 
-void _allPosition(int depth, const std::vector<size_t>& shape, std::vector<size_t> curr_iter, std::vector<std::vector<size_t>>& res) {
+void _allPosition(size_t depth, const std::vector<size_t>& shape, std::vector<size_t> curr_iter, std::vector<std::vector<size_t>>& res) {
 	if(depth == shape.size()) {
 		res.push_back(curr_iter);
 		return;
@@ -284,7 +284,6 @@ struct Cells
 
 			std::vector<size_t> cell_index = foldIndex(i, as<std::vector<size_t>>(shape()));
 			auto& connections = connections_[i];
-			auto& permence = permence_[i];
 			assert(connections.size() == permence.size());
 
 			for(const auto& input : all_on_bits) {
@@ -313,7 +312,7 @@ xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 
 	xt::xarray<bool> res = xt::zeros<bool>(x.shape());
 	uint32_t min_accept_val = v[x.size()*density].first;
-	for(size_t i=0;v[i].first >= min_accept_val;i++)
+	for(size_t i=0;(uint32_t)v[i].first >= min_accept_val;i++)
 		res[v[i].second] = true;
 	return res;
 }
@@ -353,9 +352,8 @@ struct SpatialPooler
 		xt::xarray<uint32_t> overlap_score = cells_.calcOverlap(x);
 		xt::xarray<bool> res = globalInhibition(overlap_score, global_density_);
 
-		if(learn == true) {
+		if(learn == true)
 			cells_.learnCorrilation(x, res, 0.1, 0.1);
-		}
 		return res;
 	}
 
@@ -427,6 +425,12 @@ struct TemporalMemory
 		}
 		active_cells_ = active_cells;
 		return xt::sum(predictive_cells_, -1);
+	}
+
+	void reset()
+	{
+		predictive_cells_ = xt::zeros<bool>(cells_.shape());
+		active_cells_ = xt::zeros<bool>(cells_.shape());
 	}
 
 	Cells cells_;

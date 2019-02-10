@@ -6,7 +6,7 @@
 #include <xtensor/xdynamic_view.hpp>
 #include <xtensor/xrandom.hpp>
 
-#include "HTMField.hpp"
+#include <tiny_htm/tiny_htm.hpp>
 
 #include <string>
 #include <fstream>
