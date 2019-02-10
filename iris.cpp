@@ -72,7 +72,7 @@ int main()
 	auto traning_set = xt::view(dataset, xt::range(0, dataset.shape()[0]/2));
 	auto testing_set = xt::view(dataset, xt::range(dataset.shape()[0]/2, -1));
 
-	SpatialPooler1D sp(64, 32);
+	SpatialPooler sp({64}, {32});
 
 	//Train SpatialPooler to reconize the patterns
 	for(size_t i=0;i<traning_set.shape()[0];i++) {

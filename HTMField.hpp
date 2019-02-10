@@ -13,12 +13,18 @@
 
 #include <assert.h>
 
-xt::xdynamic_slice_vector sliceVec(const std::vector<size_t>& v)
+xt::xdynamic_slice_vector asCoord(const std::vector<size_t>& v)
 {
 	xt::xdynamic_slice_vector sv;
 	for(auto i : v)
-		sv.push_back(i);
+		sv.push_back((int)i);
 	return sv;
+}
+
+template<typename ResType, typename InType>
+inline ResType as(const InType& shape)
+{
+	return ResType(shape.begin(), shape.end());
 }
 
 //Your standard ScalarEncoder.
@@ -123,19 +129,21 @@ inline xt::xarray<bool> encodeCategory(size_t category, size_t num_cat, size_t e
 	return e.encode(category);
 }
 
-inline std::vector<size_t> foldIndex(size_t index, const std::vector<size_t>& shape)
+std::vector<size_t> foldIndex(size_t index, const std::vector<size_t>& shape)
 {
+	assert(shape.size() != 0);
 	std::vector<size_t> v(shape.size());
 	size_t acc = 1;
-	for(size_t i=shape.size()-1;i>=0;i--) {
-		acc *= v[i];
+	for(int i=(int)shape.size()-1;i>=0;i--) {
+		acc *= shape[i];
 		v[i] = acc;
 	}
-	std::vector<size_t> res(shape.size());
-	for(size_t i=0;i<v.size();i++) {
-		res[i] = index/v[i];
+	std::vector<size_t> res(v.size());
+	for(size_t i=1;i<v.size();i++) {
+		res[i-1] = index/v[i];
 		index = index%v[i];
 	}
+	res.back() = index;
 	return res;
 }
 
@@ -154,100 +162,147 @@ inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
 	return s;
 }
 
-//Flexable framework for HTM implementations
-
-struct CellSheet
-{
-	CellSheet(size_t num_cells, size_t max_connection_per_cell)
-	{
-		connection_target = xt::xarray<std::vector<size_t>>::from_shape({num_cells, max_connection_per_cell});
-		connection_permence = xt::zeros<float>({num_cells, max_connection_per_cell});
-	}
-
-
-	xt::xarray<uint32_t> calculateOverlapScore(const xt::xarray<bool>& x)
-	{
-		xt::xarray<uint32_t> res = xt::zeros<uint32_t>({connection_permence.shape()[0]});
-		for(size_t i=0;i<connection_permence.shape()[0];i++) {
-			uint32_t sum = 0;
-			for(size_t j=0;j<connection_permence.shape()[1];j++) {
-				if(xt::dynamic_view(x, sliceVec(xt::view(connection_target, i, j)[0]))[0] == true
-					&& xt::view(connection_permence, i, j)[0] > 0.21)
-					sum += 1;
-			}
-			xt::view(res, i) = sum;
-		}
-		return res;
-	}
-
-	void learnCorrelation(const xt::xarray<bool>& x, const xt::xarray<bool>& y, float perm_incerment, float perm_decarment)
-	{
-		assert(y.shape()[0] == connection_permence.shape()[0]);
-		for(size_t i=0;i<connection_permence.shape()[0];i++) {
-			if(xt::view(y, i)[0] != true)
-				continue;
-			
-			for(size_t j=0;j<connection_permence.shape()[1];j++) {
-				auto v = xt::view(connection_permence, i, j);
-				if(xt::dynamic_view(x, sliceVec(xt::view(connection_target, i, j)[0]))[0] == true)
-					v += perm_incerment;
-				else
-					v -= perm_decarment;
-			}
-		}
-	}
-
-	void growSynasps(const xt::xarray<bool>& x, const xt::xarray<bool>& learn)
-	{
-		//D only now
-		std::vector<size_t> active_input;
-		//TODO: This is slow
-		for(size_t i=0;i<x.size();i++) {
-			if(x[i] == true)
-				active_input.push_back(i);
-		}
-		
-		for(size_t i=0;i<learn.size();i++) {
-			if(learn[i] == false)
-				continue;
-			
-			std::vector<size_t> possible_new_connection;
-			for(size_t i=0;i<connection_target.shape()[1];i++) {
-				size_t ci = unfoldIndex(connection_target[i], x.shape());
-				//auto v = 
-				//if(std::find())
-			}
-		}
-	}
-
-	xt::xarray<float> connection_permence;
-	xt::xarray<std::vector<size_t>> connection_target;
-};
-
-void allInputCellInternal(int depth, const std::vector<size_t>& shape, std::vector<size_t> curr_iter, std::vector<std::vector<size_t>>& res) {
+void _allPosition(int depth, const std::vector<size_t>& shape, std::vector<size_t> curr_iter, std::vector<std::vector<size_t>>& res) {
 	if(depth == shape.size()) {
 		res.push_back(curr_iter);
 		return;
 	}
-	for(size_t i=0;i<shape[i];i++) {
+	for(size_t i=0;i<shape[depth];i++) {
 		auto n = curr_iter;
 		n.push_back(i);
-		allInputCellInternal(depth+1, shape, std::move(n), res);
+		_allPosition(depth+1, shape, std::move(n), res);
 	}
 
 };
 
-std::vector<std::vector<size_t>> allInputCell(const std::vector<size_t>& input_shape)
+std::vector<std::vector<size_t>> allPosition(const std::vector<size_t>& input_shape)
 {
 	std::vector<std::vector<size_t>> res;
 	size_t vol = 1;
 	for(auto l : input_shape)
 		vol *= l;
-	res.resize(vol);
+	res.reserve(vol);
 	
-	allInputCellInternal(0, input_shape, {}, res);
+	_allPosition(0, input_shape, {}, res);
 	return res;
 }
+
+struct Cells
+{
+	Cells() = default;
+	Cells(std::vector<size_t> cell_shape, size_t max_connection_per_cell)
+		: max_connection_per_cell_(max_connection_per_cell)
+	{
+		connections_ = decltype(connections_)::from_shape(as<xt::xarray<float>::shape_type>(cell_shape));
+		permence_ = decltype(permence_)::from_shape(as<xt::xarray<float>::shape_type>(cell_shape));
+	}
+
+	size_t size() const
+	{
+		return connections_.size();
+	}
+
+	std::vector<size_t> shape() const
+	{
+		return as<std::vector<size_t>>(connections_.shape());
+	}
+
+	void connect(const std::vector<size_t>& input_pos, const std::vector<size_t>& cell_pos, float initial_permence)
+	{
+		assert(cell_pos.size() == shape().size());
+		auto& connection_list = xt::dynamic_view(connections_, asCoord(cell_pos))[0];
+		auto& permence_list = xt::dynamic_view(permence_, asCoord(cell_pos))[0];
+
+		if(connection_list.size() == max_connection_per_cell_)
+			throw std::runtime_error("Connection list full. Synasp trimming not implemented.");
+		for(size_t i=0;i<cell_pos.size();i++)
+			assert(cell_pos[i] < shape()[i]);
+		
+		connection_list.push_back(input_pos);
+		permence_list.push_back(initial_permence);
+	}
+
+	xt::xarray<uint32_t> calcOverlap(const xt::xarray<bool>& x) const
+	{
+		xt::xarray<uint32_t> res = xt::zeros<uint32_t>(shape());
+		for(size_t i=0;i<size();i++) {
+			const auto& connections = connections_[i];
+			const auto& permence = permence_[i];
+
+			assert(connections.size() == permence.size());
+			uint32_t score = 0;
+			for(size_t j=0;j<connections.size();j++) {
+				if(permence[j] < 0.21)
+					continue;
+				auto v = xt::dynamic_view(x, asCoord(connections[j]));
+				assert(v.size() == 1);
+				bool bit = v[0];
+				score += bit;
+			}
+			res[i] = score;
+		}
+		return res;
+	}
+
+	void learnCorrilation(const xt::xarray<bool>& x, const xt::xarray<bool>& learn, float perm_inc, float perm_dec)
+	{
+		assert(connections_.size() == learn.size()); // A loose check for the same shape
+		auto clamp =[](float x) {return std::min(1.f, std::max(x, 0.f));};
+		for(size_t i=0;i<connections_.size();i++) {
+			if(learn[i] == false)
+				continue;
+
+			const auto& connections = connections_[i];
+			auto& permence = permence_[i];
+			for(size_t j=0;j<connections.size();j++) {
+				auto v = xt::dynamic_view(x, asCoord(connections[j]));
+				assert(v.size() == 1);
+				bool bit = v[0];
+				if(bit == true)
+					permence[j] += perm_inc;
+				else
+					permence[j] -= perm_dec;
+				permence[j] = clamp(permence[j]);
+			}
+		}
+	}
+
+	void growSynasp(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_inc, float perm_dec)
+	{
+		assert(learn.size() == size()); //A loose check
+		std::vector<std::vector<size_t>> all_on_bits;
+		for(size_t i=0;i<x.size();i++) {
+			if(x[i] == true)
+				all_on_bits.push_back(foldIndex(i, as<std::vector<size_t>>(x.shape())));
+		}
+		if(all_on_bits.size() == 0)
+			return;
+
+		for(size_t i=0;i<learn.size();i++) {
+			if(learn[i] == false)
+				continue;
+
+			std::vector<size_t> cell_index = foldIndex(i, as<std::vector<size_t>>(shape()));
+			auto& connections = connections_[i];
+			auto& permence = permence_[i];
+			assert(connections.size() == permence.size());
+
+			for(const auto& input : all_on_bits) {
+				if(std::find_if(connections.begin(), connections.end(), [&input](const auto& a) {
+					if(a.size() != input.size()) return false;
+					return std::equal(a.begin(), a.end(), input.begin());
+					}) != connections.end()) 
+					continue;
+				
+				connect(input, cell_index, 0.5);
+			}
+		}
+	}
+
+	xt::xarray<std::vector<std::vector<size_t>>> connections_;
+	xt::xarray<std::vector<float>> permence_;
+	size_t max_connection_per_cell_;
+};
 
 xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 {
@@ -263,109 +318,121 @@ xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 	return res;
 }
 
-//TODO: Implement Boosting
-class SpatialPooler1D
+//TODO: implement boosting, topology
+struct SpatialPooler
 {
-public:
-	SpatialPooler1D(size_t input_size, size_t output_size, float potential_pool_pct=0.75f)
-		: cells_(output_size, input_size*potential_pool_pct), output_size_(output_size)
+	SpatialPooler(std::vector<size_t> input_shape, std::vector<size_t> output_shape, float potential_pool_pct=0.75) //The SP breaks spatial infomation tho
+		: cells_(output_shape, std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>()))
 	{
-		std::vector<std::vector<size_t>> connection_cells = allInputCell({input_size});
-		int idx = 0; std::generate(connection_cells.begin(), connection_cells.end(), [&idx](){return std::vector<size_t>{(size_t)idx++};});
+		static std::mt19937 rng;
+		//Initalize potential pool
+		if(potential_pool_pct > 1 or potential_pool_pct < 0)
+			throw std::runtime_error("potential_pool_pct must be between 0~1, but get" + std::to_string(potential_pool_pct));
+		
+		std::vector<std::vector<size_t>> all_input_cell = allPosition(input_shape);
+		size_t potential_pool_connections = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>());
+		for(size_t i=0;i<cells_.size();i++) {
+			auto& connections = cells_.connections_[i];
+			auto& permence = cells_.permence_[i];
 
-		std::random_device rd;
-		std::mt19937 rng(rd());
-		auto genPermence = [&rng](){std::normal_distribution<float> perm_dist(0.15, 1); return std::max(std::min(perm_dist(rng), 1.f), 0.f);};
+			std::shuffle(all_input_cell.begin(), all_input_cell.end(), rng);
+			std::normal_distribution<float> dist(0.5, 1);
+			auto clamp =[](float x) {return std::min(1.f, std::max(x, 0.f));};
+			for(size_t j=0;j<potential_pool_connections;j++) {
+				connections.push_back(all_input_cell[j]);
+				permence.push_back(clamp(dist(rng)));
 
-		size_t num_max_connection = input_size*potential_pool_pct;
-		for(size_t i=0;i<output_size;i++) {
-			std::random_shuffle(connection_cells.begin(), connection_cells.end());
-			for(size_t j=0;j<num_max_connection;j++) {
-				xt::view(cells_.connection_permence, i, j) = genPermence();
-				xt::view(cells_.connection_target, i, j) = connection_cells[j];
+				assert(connections.size() == permence.size());
+				assert(connections.size() == j+1);
 			}
 		}
-	}
-
-	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn) 
-	{
-		xt::xarray<uint32_t> overlap_score = cells_.calculateOverlapScore(x);
-
-		//Global inhibition
-		xt::xarray<bool> res = globalInhibition(overlap_score, global_density);
-		//End of global inhibition
-
-		if(learn == true)
-			 cells_.learnCorrelation(x, res, 0.045, 0.045);
-
-		return res;
-	}
-
-	CellSheet cells_;
-	size_t output_size_;
-	bool global_inhibition = true;
-	float global_density = 0.1f;
-};
-
-class TemporalMemory1D
-{
-public:
-	TemporalMemory1D(size_t num_input, size_t cells_per_column)
-		: cells_(num_input*cells_per_column, 64)
-	{
-		active_cells_ = xt::zeros<bool>({num_input, cells_per_column});
 	}
 
 	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
 	{
-		xt::xarray<bool> active_cells_post_burst = applyBurst(x, active_cells_);
-		xt::xarray<uint32_t> overlap = cells_.calculateOverlapScore(active_cells_post_burst);
-		
-		xt::xarray<bool> predictive = globalInhibition(overlap, 0.1f);
-		xt::xarray<bool> pred = xt::cast<bool>(xt::sum(predictive, 0));
+		xt::xarray<uint32_t> overlap_score = cells_.calcOverlap(x);
+		xt::xarray<bool> res = globalInhibition(overlap_score, global_density_);
 
 		if(learn == true) {
-			static std::mt19937 rng;
-			//Learn sequence memory
-			xt::xarray<bool> learn_cells = active_cells_post_burst;
-			std::uniform_int_distribution<size_t> dist(0, learn_cells.shape()[1]);
-			for(auto i=0;i<learn_cells.shape()[0];i++) {
-				auto v = xt::view(learn_cells, i);
-				if(xt::sum(v)[0] == v.size()) {
-					v = false;
-					v[dist(rng)] = true;
-				}
-			}
-			cells_.growSynasps(active_cells_, learn_cells);
-			cells_.learnCorrelation(active_cells_, learn_cells, 0.1, 0.1);
-		}
-		active_cells_ = pred;
-		return pred;
-	}
-
-	static xt::xarray<bool> applyBurst(const xt::xarray<bool>& x, const xt::xarray<bool>& s)
-	{
-		if(x.shape().size() != 1)
-			throw std::runtime_error("applyBurst: input data must be 1D");
-		if(x.shape()[0] != s.shape()[0])
-			throw std::runtime_error("applyBurst: input data shape mismach with internal state");
-		xt::xarray<bool> res = s;
-		for(size_t i=0;i<x.shape()[0];i++) {
-			auto v = xt::view(s, i);
-			if(xt::view(x, i)[0] == true && xt::sum(v)[0] == 0)
-				xt::view(res, i) = true;
+			cells_.learnCorrilation(x, res, 0.1, 0.1);
 		}
 		return res;
 	}
-	CellSheet cells_;
-	xt::xarray<bool> active_cells_;
+
+	Cells cells_;
+	float global_density_ = 0.15;
 };
 
-template<typename ResType, typename InType>
-inline ResType as(const InType& shape)
+xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x)
 {
-	return ResType(shape.begin(), shape.end());
+	assert(s.dimension() == x.dimension()+1);
+	assert(s.size()/s.shape().back() == x.size());
+	xt::xarray<bool> res = s;
+	xt::xarray<uint32_t> tmp = xt::sum(s, -1);
+	xt::xarray<bool> boost_columns = (tmp < 1) && (x > 0); //Don't know why == and != does nto work. WOrkarround
+	assert(boost_columns.dimension() == res.dimension()-1);
+	//xt::filtration(res, boost_columns) = true; //Causes buffer-overflow
+	size_t column_size = s.shape().back();
+	for(size_t i=0;i<res.size();i++) {
+		if(boost_columns[i/column_size] == true)
+			res[i] = true;
+	}
+	return res;
 }
+
+xt::xarray<bool> selectLearningCell(const xt::xarray<bool>& x)
+{
+	assert(x.dimension() >= 2);
+	static std::mt19937 rng;
+	size_t column_size = x.shape().back();
+	std::uniform_int_distribution<size_t> dist(0, column_size-1);
+	xt::xarray<bool> res = x;
+
+	for(size_t i=0;i<x.size()/column_size;i++) {
+		size_t sum = 0;
+		for(size_t j=0;j<column_size;j++)
+			sum += x.at(i, j);
+
+		if(sum == column_size) {
+			for(size_t j=0;j<column_size;j++)
+				res.at(i, j) = false;
+			res.at(i, dist(rng)) = true;
+		}
+	}
+	return res;
+}
+
+struct TemporalMemory
+{
+	TemporalMemory(const std::vector<size_t>& data_shape, size_t cells_per_column, size_t segments_per_cell = 1024)
+	{
+		std::vector<size_t> cell_shape = data_shape;
+		cell_shape.push_back(cells_per_column);
+		cells_ = Cells(cell_shape, segments_per_cell);
+
+		predictive_cells_ = xt::zeros<bool>(cell_shape);
+		active_cells_ = xt::zeros<bool>(cell_shape);
+	}
+
+	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
+	{
+		xt::xarray<bool> active_cells = applyBurst(predictive_cells_, x);
+		xt::xarray<uint32_t> overlap = cells_.calcOverlap(active_cells);
+		predictive_cells_ = (overlap > 2); //TODO: Arbitrary value
+		if(learn == true) {
+			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
+			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
+			cells_.learnCorrilation(last_active, apply_learning, 0.1, 0.1);
+			cells_.growSynasp(last_active, apply_learning, 0.1, 0.1);
+		}
+		active_cells_ = active_cells;
+		return xt::sum(predictive_cells_, -1);
+	}
+
+	Cells cells_;
+	xt::xarray<bool> predictive_cells_;
+	xt::xarray<bool> active_cells_;
+};
 
 //Classifers
 struct SDRClassifer
