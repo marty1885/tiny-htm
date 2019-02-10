@@ -187,6 +187,29 @@ std::vector<std::vector<size_t>> allPosition(const std::vector<size_t>& input_sh
 	return res;
 }
 
+template <typename T, typename Compare>
+std::vector<std::size_t> sort_permutation(
+    const std::vector<T>& vec,
+    Compare compare)
+{
+	std::vector<std::size_t> p(vec.size());
+	std::iota(p.begin(), p.end(), 0);
+	std::sort(p.begin(), p.end(),
+		[&](std::size_t i, std::size_t j){ return compare(vec[i], vec[j]); });
+	return p;
+}
+
+template <typename T>
+std::vector<T> apply_permutation(
+    const std::vector<T>& vec,
+    const std::vector<std::size_t>& p)
+{
+	std::vector<T> sorted_vec(vec.size());
+	std::transform(p.begin(), p.end(), sorted_vec.begin(),
+		[&](std::size_t i){ return vec[i]; });
+	return sorted_vec;
+}
+
 struct Cells
 {
 	Cells() = default;
@@ -267,7 +290,7 @@ struct Cells
 		}
 	}
 
-	void growSynasp(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_inc, float perm_dec)
+	void growSynapse(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_inc, float perm_dec)
 	{
 		assert(learn.size() == size()); //A loose check
 		std::vector<std::vector<size_t>> all_on_bits;
@@ -295,6 +318,27 @@ struct Cells
 				
 				connect(input, cell_index, 0.5);
 			}
+		}
+	}
+
+	void sortSynapse()
+	{
+		assert(connections_.size() == permence_.size());
+		for(size_t i=0;i<connections_.size();i++) {
+			auto& connections = connections_[i];
+			auto& permence = permence_[i];
+			std::vector<size_t> connection_indices;
+			connection_indices.reserve(connections.size());
+			for(const auto& c : connections)
+				connection_indices.push_back(unfoldIndex(c, shape()));
+			auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
+			connection_indices = apply_permutation(connection_indices, p);
+			permence = apply_permutation(permence, p);
+
+			for(size_t i=0;i<connection_indices.size();i++) {
+				connections[i] = foldIndex(connection_indices[i], shape());
+			}
+
 		}
 	}
 
@@ -345,6 +389,7 @@ struct SpatialPooler
 				assert(connections.size() == j+1);
 			}
 		}
+		cells_.sortSynapse();
 	}
 
 	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
@@ -421,7 +466,7 @@ struct TemporalMemory
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
 			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
 			cells_.learnCorrilation(last_active, apply_learning, 0.1, 0.1);
-			cells_.growSynasp(last_active, apply_learning, 0.1, 0.1);
+			cells_.growSynapse(last_active, apply_learning, 0.1, 0.1);
 		}
 		active_cells_ = active_cells;
 		return xt::sum(predictive_cells_, -1);
