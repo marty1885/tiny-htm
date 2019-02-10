@@ -237,10 +237,22 @@ struct Cells
 		auto& connection_list = xt::dynamic_view(connections_, asCoord(cell_pos))[0];
 		auto& permence_list = xt::dynamic_view(permence_, asCoord(cell_pos))[0];
 
-		if(connection_list.size() == max_connection_per_cell_)
-			throw std::runtime_error("Connection list full. Synasp trimming not implemented.");
 		for(size_t i=0;i<cell_pos.size();i++)
 			assert(cell_pos[i] < shape()[i]);
+		if(connection_list.size() == max_connection_per_cell_) {
+			//Find the weakest synapse and roverrite it
+			size_t min_index = 0;
+			float min_value = permence_list[0];
+			for(size_t i=1;i<connection_list.size();i++) {
+				if(min_value > permence_list[i]) {
+					min_value = permence_list[i];
+					min_index = i;
+				}
+
+				connection_list[min_index] = input_pos;
+				permence_list[min_index] = initial_permence;
+			}
+		}
 		
 		connection_list.push_back(input_pos);
 		permence_list.push_back(initial_permence);
@@ -484,8 +496,8 @@ struct TemporalMemory
 		if(learn == true) {
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
 			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
-			cells_.learnCorrilation(last_active, apply_learning, 0.1, 0.1);
-			cells_.growSynapse(last_active, apply_learning, 0.1, 0.1);
+			cells_.learnCorrilation(last_active, apply_learning, permence_incerment_, permence_decerment_);
+			cells_.growSynapse(last_active, apply_learning, permence_incerment_, permence_decerment_);
 		}
 		active_cells_ = active_cells;
 		return xt::sum(predictive_cells_, -1);
@@ -496,6 +508,9 @@ struct TemporalMemory
 		predictive_cells_ = xt::zeros<bool>(cells_.shape());
 		active_cells_ = xt::zeros<bool>(cells_.shape());
 	}
+
+	float permence_incerment_ = 0.1f;
+	float permence_decerment_ = 0.1f;
 
 	Cells cells_;
 	xt::xarray<bool> predictive_cells_;
