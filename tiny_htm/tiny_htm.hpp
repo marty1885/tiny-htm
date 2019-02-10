@@ -101,6 +101,8 @@ struct CategoryEncoder
 			if(xt::sum(xt::view(t, xt::range(i*encode_length, (i+1)*encode_length)))[0] > 0)
 				possible_category.push_back(i);
 		}
+		if(possible_category.size() == 0)
+			possible_category.push_back(0);
 		return possible_category;
 	}
 
@@ -329,9 +331,9 @@ struct Cells
 			connection_indices.reserve(connections.size());
 			for(const auto& c : connections)
 				connection_indices.push_back(unfoldIndex(c, shape()));
-			//auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
-			//connection_indices = apply_permutation(connection_indices, p);
-			//permence = apply_permutation(permence, p);
+			auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
+			connection_indices = apply_permutation(connection_indices, p);
+			permence = apply_permutation(permence, p);
 
 			assert(connection_indices.size() == connections.size());
 			for(size_t i=0;i<connection_indices.size();i++)

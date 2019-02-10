@@ -14,6 +14,11 @@ int main()
 {
 	TemporalMemory tm({8}, 6);
 	CategoryEncoder encoder(2, 4);
-	for(int i=0;i<120;i++)
-		std::cout << xt::cast<int>(tm.compute(encoder.encode(i%2), true)) << std::endl;
+	std::cout << "Learning the sequence 01010101...." << std::endl
+		<< "Algorithm prediction: " << std::endl;
+	for(int i=0;i<40 ;i++) {
+		auto res = tm.compute(encoder.encode(i%2), true);
+		std::cout << encoder.decode(res)[0];
+	}
+	std::cout << std::endl;
 }
