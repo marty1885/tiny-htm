@@ -154,7 +154,7 @@ inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
 	size_t v = 1;
 	assert(index.size() == shape.size());
 	for(size_t i=0;i<index.size();i++) {
-		size_t n = v * index[i];
+		size_t n = v * (i==0? 1 : index[i-1]);
 		s += n;
 		v *= shape[i];
 	}
