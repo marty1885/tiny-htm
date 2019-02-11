@@ -189,7 +189,7 @@ std::vector<std::vector<size_t>> allPosition(const std::vector<size_t>& input_sh
 }
 
 template <typename T, typename Compare>
-std::vector<std::size_t> sort_permutation(
+inline std::vector<std::size_t> sort_permutation(
     const std::vector<T>& vec,
     Compare compare)
 {
@@ -239,7 +239,8 @@ struct Cells
 
 		for(size_t i=0;i<cell_pos.size();i++)
 			assert(cell_pos[i] < shape()[i]);
-		if(connection_list.size() == max_connection_per_cell_) {
+		if(connection_list.size() == max_connection_per_cell_) throw std::runtime_error("Synapes are full in cells");
+		/*{
 			//Find the weakest synapse and roverrite it
 			size_t min_index = 0;
 			float min_value = permence_list[0];
@@ -252,7 +253,7 @@ struct Cells
 				connection_list[min_index] = input_pos;
 				permence_list[min_index] = initial_permence;
 			}
-		}
+		}*/
 		
 		connection_list.push_back(input_pos);
 		permence_list.push_back(initial_permence);
@@ -322,6 +323,8 @@ struct Cells
 			auto& connections = connections_[i];
 
 			for(const auto& input : all_on_bits) {
+				if(connections.size() == max_connection_per_cell_) //Don't make new connections if full
+					break;
 				if(std::find_if(connections.begin(), connections.end(), [&input](const auto& a) {
 					if(a.size() != input.size()) return false;
 					return std::equal(a.begin(), a.end(), input.begin());
@@ -429,11 +432,22 @@ struct SpatialPooler
 		xt::xarray<bool> res = globalInhibition(overlap_score, global_density_);
 
 		if(learn == true)
-			cells_.learnCorrilation(x, res, 0.1, 0.1);
+			cells_.learnCorrilation(x, res, permence_incerment_, permence_decerment_);
 		return res;
 	}
 
 	Cells cells_;
+
+	//All the getter and seters
+	void setPermenceIncerment(float v) {permence_incerment_ = v;}
+	void setPermenceDecerment(float v) {permence_decerment_ = v;}
+
+	float getPermenceIncerment() const {return permence_incerment_;}
+	float getPermenceDecerment() const {return permence_decerment_;}
+
+	float permence_incerment_ = 0.1f;
+	float permence_decerment_ = 0.1f;
+
 	float global_density_ = 0.15;
 };
 
@@ -478,7 +492,7 @@ xt::xarray<bool> selectLearningCell(const xt::xarray<bool>& x)
 
 struct TemporalMemory
 {
-	TemporalMemory(const std::vector<size_t>& data_shape, size_t cells_per_column, size_t segments_per_cell = 1024)
+	TemporalMemory(const std::vector<size_t>& data_shape, size_t cells_per_column=16, size_t segments_per_cell = 1024)
 	{
 		std::vector<size_t> cell_shape = data_shape;
 		cell_shape.push_back(cells_per_column);
@@ -508,6 +522,13 @@ struct TemporalMemory
 		predictive_cells_ = xt::zeros<bool>(cells_.shape());
 		active_cells_ = xt::zeros<bool>(cells_.shape());
 	}
+
+	//All the getter and seters
+	void setPermenceIncerment(float v) {permence_incerment_ = v;}
+	void setPermenceDecerment(float v) {permence_decerment_ = v;}
+
+	float getPermenceIncerment() const {return permence_incerment_;}
+	float getPermenceDecerment() const {return permence_decerment_;}
 
 	float permence_incerment_ = 0.1f;
 	float permence_decerment_ = 0.1f;
