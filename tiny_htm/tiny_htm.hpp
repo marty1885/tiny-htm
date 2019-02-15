@@ -92,8 +92,8 @@ struct CategoryEncoder
 			if(xt::sum(xt::view(t, xt::range(i*encode_length, (i+1)*encode_length)))[0] > 0)
 				possible_category.push_back(i);
 		}
-		if(possible_category.size() == 0)
-			possible_category.push_back(0);
+		//if(possible_category.size() == 0)
+		//	possible_category.push_back(0);
 		return possible_category;
 	}
 
