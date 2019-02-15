@@ -37,11 +37,13 @@ float benchmarkTemporalMemory(const std::vector<size_t>& out_shape, const std::v
 
 std::vector<xt::xarray<bool>> generateRandomData(size_t input_length, size_t num_data)
 {
-	std::vector<xt::xarray<bool>> res;
+	std::vector<xt::xarray<bool>> res(num_data);
 	static std::mt19937 rng;
 	std::uniform_real_distribution<float> dist(0, 1);
+
+	#pragma omp parallel for
 	for(size_t i=0;i<num_data;i++)
-		res.push_back(encodeScalar(dist(rng), 0, 1, input_length, input_length*0.15));
+		res[i] = encodeScalar(dist(rng), 0, 1, input_length, input_length*0.15);
 	return res;
 }
 

@@ -13,6 +13,7 @@ This project is in it's really early ages. Archicture breaking changes will happ
 ## Dependency
 * [xtensor](https://github.com/QuantStack/xtensor/)
 * A C++17 capable compiler
+* OpenMP capable compiler (optional)
 
 ## Build and install
 ```shell
@@ -38,7 +39,10 @@ make install
 
 ### Misc
 * [ ] Performance optimization
+  * [x] Overhead reduction.
+  * [x] benchmark tools
 * [ ] Parallel algorithm execution
+  * [x] Add OpenMP support.
 * [ ] Saving the models
 * [ ] Make hyper parameter changable
 

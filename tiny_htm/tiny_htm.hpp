@@ -27,6 +27,8 @@ struct ScalarEncoder
 	{
 		if(min_val > max_val)
 			throw std::runtime_error("ScalarEncoder error: min_val > max_val");
+		if(result_sdr_length < num_active_bits)
+			throw std::runtime_error("ScalarEncoder error: result_sdr_length < num_active_bits");
 	}
 
 	xt::xarray<bool> operator() (float value) const
@@ -122,7 +124,8 @@ inline xt::xarray<bool> encodeCategory(size_t category, size_t num_cat, size_t e
 	return e.encode(category);
 }
 
-std::vector<size_t> foldIndex(size_t index, const std::vector<size_t>& shape)
+template <typename ShapeType>
+std::vector<size_t> foldIndex(size_t index, const ShapeType& shape)
 {
 	assert(shape.size() != 0);
 	std::vector<size_t> v(shape.size());
@@ -140,8 +143,8 @@ std::vector<size_t> foldIndex(size_t index, const std::vector<size_t>& shape)
 	return res;
 }
 
-template <typename T>
-inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
+template <typename IdxType, typename ShapeType>
+inline size_t unfoldIndex(const IdxType& index, const ShapeType& shape)
 {
 	size_t s = 0;
 	size_t v = 1;
@@ -154,7 +157,8 @@ inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
 	return s;
 }
 
-void _allPosition(size_t depth, const std::vector<size_t>& shape, std::vector<size_t> curr_iter, std::vector<std::vector<size_t>>& res) {
+void _allPosition(size_t depth, const std::vector<size_t>& shape, std::vector<size_t> curr_iter, std::vector<std::vector<size_t>>& res)
+{
 	if(depth == shape.size()) {
 		res.push_back(curr_iter);
 		return;
@@ -205,14 +209,14 @@ std::vector<T> apply_permutation(
 template <typename T>
 const T& ndIndexing(const xt::xarray<T>& arr,const std::vector<size_t>& idx)
 {
-	return arr[unfoldIndex(idx, as<std::vector<size_t>>(arr.shape()))];
+	return arr[unfoldIndex(idx, arr.shape())];
 }
 
 
 template <typename T>
 T& ndIndexing(xt::xarray<T>& arr,const std::vector<size_t>& idx)
 {
-	return arr[unfoldIndex(idx, as<std::vector<size_t>>(arr.shape()))];
+	return arr[unfoldIndex(idx, arr.shape())];
 }
 
 struct Cells
