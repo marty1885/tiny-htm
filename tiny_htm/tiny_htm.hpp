@@ -472,14 +472,20 @@ xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x
 	assert(s.dimension() == x.dimension()+1);
 	assert(s.size()/s.shape().back() == x.size());
 	xt::xarray<bool> res = s;
-	xt::xarray<uint32_t> tmp = xt::sum(s, -1);
-	xt::xarray<bool> boost_columns = (tmp < 1) && (x > 0); //Don't know why == and != does nto work. WOrkarround
-	assert(boost_columns.dimension() == res.dimension()-1);
-	//xt::filtration(res, boost_columns) = true; //Causes buffer-overflow
-	size_t column_size = s.shape().back();
-	for(size_t i=0;i<res.size();i++) {
-		if(boost_columns[i/column_size] == true)
-			res[i] = true;
+	size_t column_size = res.shape().back();
+
+	#pragma omp parallel for
+	for(size_t i=0;i<res.size()/column_size;i++) {
+		if(x[i] == false)
+			continue;
+
+		size_t sum = 0;
+		for(size_t j=0;j<column_size;j++)
+			sum += s[i*column_size+j];
+		if(sum == 0) {
+			for(size_t j=0;j<column_size;j++)
+				res[i*column_size+j] = true;
+		}
 	}
 	return res;
 }
