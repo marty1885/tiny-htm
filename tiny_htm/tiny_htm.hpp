@@ -4,7 +4,6 @@
 #include <xtensor/xview.hpp>
 #include <xtensor/xio.hpp>
 #include <xtensor/xindex_view.hpp>
-#include <xtensor/xdynamic_view.hpp>
 
 #include <vector>
 #include <algorithm>
@@ -12,14 +11,6 @@
 #include <queue>
 
 #include <assert.h>
-
-xt::xdynamic_slice_vector asCoord(const std::vector<size_t>& v)
-{
-	xt::xdynamic_slice_vector sv;
-	for(auto i : v)
-		sv.push_back((int)i);
-	return sv;
-}
 
 template<typename ResType, typename InType>
 inline ResType as(const InType& shape)
@@ -217,6 +208,13 @@ const T& ndIndexing(const xt::xarray<T>& arr,const std::vector<size_t>& idx)
 	return arr[unfoldIndex(idx, as<std::vector<size_t>>(arr.shape()))];
 }
 
+
+template <typename T>
+T& ndIndexing(xt::xarray<T>& arr,const std::vector<size_t>& idx)
+{
+	return arr[unfoldIndex(idx, as<std::vector<size_t>>(arr.shape()))];
+}
+
 struct Cells
 {
 	Cells() = default;
@@ -240,8 +238,8 @@ struct Cells
 	void connect(const std::vector<size_t>& input_pos, const std::vector<size_t>& cell_pos, float initial_permence)
 	{
 		assert(cell_pos.size() == shape().size());
-		auto& connection_list = xt::dynamic_view(connections_, asCoord(cell_pos))[0];
-		auto& permence_list = xt::dynamic_view(permence_, asCoord(cell_pos))[0];
+		auto& connection_list = ndIndexing(connections_, cell_pos);
+		auto& permence_list = ndIndexing(permence_, cell_pos);
 
 		for(size_t i=0;i<cell_pos.size();i++)
 			assert(cell_pos[i] < shape()[i]);
@@ -290,7 +288,9 @@ struct Cells
 	void learnCorrilation(const xt::xarray<bool>& x, const xt::xarray<bool>& learn, float perm_inc, float perm_dec)
 	{
 		assert(connections_.size() == learn.size()); // A loose check for the same shape
-		auto clamp =[](float x) {return std::min(1.f, std::max(x, 0.f));};
+		auto clamp = [](float x) {return std::min(1.f, std::max(x, 0.f));};
+
+		#pragma omp parallel for
 		for(size_t i=0;i<connections_.size();i++) {
 			if(learn[i] == false)
 				continue;
@@ -343,6 +343,8 @@ struct Cells
 	void sortSynapse()
 	{
 		assert(connections_.size() == permence_.size());
+
+		#pragma omp parallel for
 		for(size_t i=0;i<connections_.size();i++) {
 			auto& connections = connections_[i];
 			auto& permence = permence_[i];
