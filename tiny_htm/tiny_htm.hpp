@@ -318,7 +318,7 @@ struct Cells
 		}
 		if(all_on_bits.size() == 0)
 			return;
-
+		#pragma omp parallel for
 		for(size_t i=0;i<learn.size();i++) {
 			if(learn[i] == false)
 				continue;
@@ -406,17 +406,17 @@ xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 	return res;
 }
 
-//TODO: implement boosting, topology
+//TODO: implement boosting, topology. The SP breaks spatial infomation tho
 struct SpatialPooler
 {
-	SpatialPooler(std::vector<size_t> input_shape, std::vector<size_t> output_shape, float potential_pool_pct=0.75) //The SP breaks spatial infomation tho
+	SpatialPooler(std::vector<size_t> input_shape, std::vector<size_t> output_shape, float potential_pool_pct=0.75, size_t seed=42)
 		: cells_(output_shape, std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>()))
 	{
-		static std::mt19937 rng;
-		//Initalize potential pool
 		if(potential_pool_pct > 1 or potential_pool_pct < 0)
 			throw std::runtime_error("potential_pool_pct must be between 0~1, but get" + std::to_string(potential_pool_pct));
 		
+		//Initalize potential pool
+		std::mt19937 rng(seed);
 		std::vector<std::vector<size_t>> all_input_cell = allPosition(input_shape);
 		size_t potential_pool_connections = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>());
 		for(size_t i=0;i<cells_.size();i++) {
@@ -462,6 +462,7 @@ struct SpatialPooler
 	float global_density_ = 0.15;
 };
 
+//Need optimization here. Make it parallel
 xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x)
 {
 	assert(s.dimension() == x.dimension()+1);
@@ -487,6 +488,7 @@ xt::xarray<bool> selectLearningCell(const xt::xarray<bool>& x)
 	std::uniform_int_distribution<size_t> dist(0, column_size-1);
 	xt::xarray<bool> res = x;
 
+	#pragma omp parallel for
 	for(size_t i=0;i<x.size()/column_size;i++) {
 		size_t sum = 0;
 		for(size_t j=0;j<column_size;j++)
@@ -532,6 +534,11 @@ struct TemporalMemory
 	{
 		predictive_cells_ = xt::zeros<bool>(cells_.shape());
 		active_cells_ = xt::zeros<bool>(cells_.shape());
+	}
+
+	void organizeSynapse()
+	{
+		cells_.sortSynapse();
 	}
 
 	//All the getter and seters

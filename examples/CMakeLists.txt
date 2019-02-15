@@ -6,3 +6,6 @@ add_executable(tmtest tmtest.cpp)
 
 project(spbench)
 add_executable(spbench spbench.cpp)
+
+project(tmbench)
+add_executable(tmbench tmbench.cpp)
