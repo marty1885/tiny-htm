@@ -155,8 +155,8 @@ inline size_t unfoldIndex(const std::vector<size_t>& index, const T& shape)
 	size_t s = 0;
 	size_t v = 1;
 	assert(index.size() == shape.size());
-	for(size_t i=0;i<index.size();i++) {
-		v *= (i==0?1:shape[i-1]);
+	for(int i=(int)index.size()-1;i>=0;i--) {
+		v *= (i==(int)index.size()-1?1:shape[i+1]);
 		s += index[i] * v;
 	}
 
@@ -211,6 +211,12 @@ std::vector<T> apply_permutation(
 	return sorted_vec;
 }
 
+template <typename T>
+const T& ndIndexing(const xt::xarray<T>& arr,const std::vector<size_t>& idx)
+{
+	return arr[unfoldIndex(idx, as<std::vector<size_t>>(arr.shape()))];
+}
+
 struct Cells
 {
 	Cells() = default;
@@ -261,7 +267,9 @@ struct Cells
 
 	xt::xarray<uint32_t> calcOverlap(const xt::xarray<bool>& x) const
 	{
-		xt::xarray<uint32_t> res = xt::zeros<uint32_t>(shape());
+		xt::xarray<uint32_t> res = xt::xarray<uint32_t>::from_shape(shape());
+
+		#pragma omp parallel for
 		for(size_t i=0;i<size();i++) {
 			const auto& connections = connections_[i];
 			const auto& permence = permence_[i];
@@ -271,9 +279,7 @@ struct Cells
 			for(size_t j=0;j<connections.size();j++) {
 				if(permence[j] < 0.21)
 					continue;
-				auto v = xt::dynamic_view(x, asCoord(connections[j]));
-				assert(v.size() == 1);
-				bool bit = v[0];
+				bool bit = ndIndexing(x, connections[j]);
 				score += bit;
 			}
 			res[i] = score;
@@ -292,9 +298,7 @@ struct Cells
 			const auto& connections = connections_[i];
 			auto& permence = permence_[i];
 			for(size_t j=0;j<connections.size();j++) {
-				auto v = xt::dynamic_view(x, asCoord(connections[j]));
-				assert(v.size() == 1);
-				bool bit = v[0];
+				bool bit = ndIndexing(x, connections[j]);
 				if(bit == true)
 					permence[j] += perm_inc;
 				else
@@ -304,7 +308,7 @@ struct Cells
 		}
 	}
 
-	void growSynapse(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_inc, float perm_dec)
+	void growSynapse(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_init)
 	{
 		assert(learn.size() == size()); //A loose check
 		std::vector<std::vector<size_t>> all_on_bits;
@@ -331,7 +335,7 @@ struct Cells
 					}) != connections.end()) 
 					continue;
 				
-				connect(input, cell_index, 0.5);
+				connect(input, cell_index, perm_init);
 			}
 		}
 	}
@@ -383,14 +387,19 @@ struct Cells
 
 xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 {
-	std::vector<std::pair<int32_t, size_t>> v(x.size());
-	for(size_t i=0;i<x.size();i++)
-		v[i] = {x[i], i};
+	std::vector<std::pair<int32_t, size_t>> v;
+	size_t target_size = x.size()*density;
+	v.reserve(target_size);//Some sane value
+	for(size_t i=0;i<x.size();i++) {
+		if(x[i] != 0)
+			v.push_back({x[i], i});
+	}
 	std::sort(v.begin(), v.end(), [](auto& a, auto&b){return a.first > b.first;});
 
 	xt::xarray<bool> res = xt::zeros<bool>(x.shape());
-	uint32_t min_accept_val = v[x.size()*density].first;
-	for(size_t i=0;(uint32_t)v[i].first >= min_accept_val;i++)
+	uint32_t min_accept_val = v[std::min(target_size, v.size())].first;
+
+	for(size_t i=0;(uint32_t)v[i].first >= min_accept_val && i < v.size();i++)
 		res[v[i].second] = true;
 	return res;
 }
@@ -511,7 +520,7 @@ struct TemporalMemory
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
 			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
 			cells_.learnCorrilation(last_active, apply_learning, permence_incerment_, permence_decerment_);
-			cells_.growSynapse(last_active, apply_learning, permence_incerment_, permence_decerment_);
+			cells_.growSynapse(last_active, apply_learning, initial_permence_);
 		}
 		active_cells_ = active_cells;
 		return xt::sum(predictive_cells_, -1);
@@ -532,6 +541,7 @@ struct TemporalMemory
 
 	float permence_incerment_ = 0.1f;
 	float permence_decerment_ = 0.1f;
+	float initial_permence_ = 0.5f;
 
 	Cells cells_;
 	xt::xarray<bool> predictive_cells_;
