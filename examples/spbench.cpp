@@ -7,10 +7,10 @@
 
 float benchmarkSpatialPooler(const std::vector<size_t>& out_shape, const std::vector<xt::xarray<bool>>& x, size_t num_epoch)
 {
+	SpatialPooler sp(as<std::vector<size_t>>(x[0].shape()), out_shape);
+
 	auto t0 = std::chrono::high_resolution_clock::now();
 	for(size_t i=0;i<num_epoch;i++) {
-
-		SpatialPooler sp(as<std::vector<size_t>>(x[0].shape()), out_shape);
 		for(const auto& d : x) {
 			sp.compute(d, true);
 		}
@@ -32,6 +32,8 @@ std::vector<xt::xarray<bool>> generateRandomData(size_t input_length, size_t num
 
 int main()
 {
+	std::cout << "Benchmarking SpatialPooler algorithm: \n\n";
+
 	std::vector<xt::xarray<bool>> input_data;
 	std::vector<int> num_threads = {1, 2, 4, 8};
 	std::vector<size_t> input_size = {64, 128, 256, 512, 1024};

@@ -17,7 +17,7 @@ int main()
 
 	//Print the ground truth vales
 	for(int i=0;i<40 ;i++)
-		std::cout << (i+1)%sequece_len;
+		std::cout << (i+1)%sequece_len; //Since TM predicts the future. We want the i+1 state
 	std::cout << std::endl;
 
 	//Let the TM learn the patten on the go and make predictions

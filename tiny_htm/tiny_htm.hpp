@@ -366,19 +366,19 @@ struct Cells
 	void decaySynapse(float thr)
 	{
 		assert(connections_.size() == permence_.size());
+		#pragma omp parallel for
 		for(size_t i=0;i<connections_.size();i++) {
-			std::vector<size_t> remove_id;
 			auto& connections = connections_[i];
 			auto& permence = permence_[i];
+			std::vector<size_t> remove_list(connections.size());
 
-			for(size_t i=0;i<connections.size();i++) {
-				if(permence[i] < thr)
-					remove_id.push_back(i);
-			}
+			for(size_t i=0;i<connections.size();i++)
+				remove_list[i] = permence[i] < thr;
+
 			connections.erase(std::remove_if(connections.begin(), connections.end()
-				, [&](const auto& a){return remove_id[&a - connections.data()];}), connections.end());
+				, [&](const auto& a){return remove_list[&a - connections.data()];}), connections.end());
 			permence.erase(std::remove_if(permence.begin(), permence.end()
-				, [&](const auto& a){return remove_id[&a - permence.data()];}), permence.end());
+				, [&](const auto& a){return remove_list[&a - permence.data()];}), permence.end());
 		}
 	}
 

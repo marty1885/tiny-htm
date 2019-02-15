@@ -7,10 +7,12 @@
 
 float benchmarkTemporalMemory(const std::vector<size_t>& out_shape, const std::vector<xt::xarray<bool>>& x, size_t num_epoch)
 {
-	auto t0 = std::chrono::high_resolution_clock::now();
+	float time_used = 0;
 	for(size_t i=0;i<num_epoch;i++) {
 
 		TemporalMemory tm(as<std::vector<size_t>>(x[0].shape()), 16);
+
+		auto t0 = std::chrono::high_resolution_clock::now();
 		size_t j = 0;
 		for(const auto& d : x) {
 			tm.compute(d, true);
@@ -19,14 +21,18 @@ float benchmarkTemporalMemory(const std::vector<size_t>& out_shape, const std::v
 			//This makes the memory access pattern more linear
 			j += 1;
 			if(j == 20) {
+				//tm.cells_.decaySynapse(0.05);
 				tm.organizeSynapse();
 				j = 0;
 			}
 		}
-	}
-	auto t1 = std::chrono::high_resolution_clock::now();
 
-	return std::chrono::duration_cast<std::chrono::duration<float>>(t1-t0).count()/num_epoch;
+		auto t1 = std::chrono::high_resolution_clock::now();
+
+		time_used += std::chrono::duration_cast<std::chrono::duration<float>>(t1-t0).count();
+	}
+
+	return time_used/num_epoch;
 }
 
 std::vector<xt::xarray<bool>> generateRandomData(size_t input_length, size_t num_data)
@@ -41,6 +47,8 @@ std::vector<xt::xarray<bool>> generateRandomData(size_t input_length, size_t num
 
 int main()
 {
+	std::cout << "Benchmarking TemporalMemory algorithm: \n\n";
+
 	std::vector<xt::xarray<bool>> input_data;
 	std::vector<int> num_threads = {1, 2, 4, 8};
 	std::vector<size_t> input_size = {64, 128, 256, 512, 1024};
