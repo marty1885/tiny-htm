@@ -25,11 +25,6 @@ int main()
 		//Learn the pattern and make prediction (true = enable learning)
 		auto res = tm.compute(encoder.encode(i%sequece_len), true);
 
-		size_t s = 0;
-		for(auto v : tm.cells_.connections_)
-			s += v.size();
-		std::cerr << s << std::endl;
-
 		//Decode the results. Print 'N' in gray if no prediction
 		auto cat = encoder.decode(res);
 		if(cat.size() == 0)
