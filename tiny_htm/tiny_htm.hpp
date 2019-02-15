@@ -209,14 +209,14 @@ std::vector<T> apply_permutation(
 template <typename T>
 const T& ndIndexing(const xt::xarray<T>& arr,const std::vector<size_t>& idx)
 {
-	return arr[unfoldIndex(idx, arr.shape())];
+	return arr.storage()[unfoldIndex(idx, arr.shape())];
 }
 
 
 template <typename T>
 T& ndIndexing(xt::xarray<T>& arr,const std::vector<size_t>& idx)
 {
-	return arr[unfoldIndex(idx, arr.shape())];
+	return arr.storage()[unfoldIndex(idx, arr.shape())];
 }
 
 struct Cells
