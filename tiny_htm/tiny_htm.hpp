@@ -22,8 +22,8 @@ inline ResType as(const InType& shape)
 struct ScalarEncoder
 {
 	ScalarEncoder() = default;
-	ScalarEncoder(float minval, float maxval, size_t encode_len, size_t width)
-		: min_val(minval), max_val(maxval), encode_length(encode_len), sdr_length(width)
+	ScalarEncoder(float minval, float maxval, size_t result_sdr_length, size_t num_active_bits)
+		: min_val(minval), max_val(maxval), active_bits(num_active_bits), sdr_length(result_sdr_length)
 	{
 		if(min_val > max_val)
 			throw std::runtime_error("ScalarEncoder error: min_val > max_val");
@@ -36,9 +36,9 @@ struct ScalarEncoder
 
 	xt::xarray<bool> encode(float value) const
 	{
-		float encode_space = sdr_length - encode_length;
+		float encode_space = sdr_length - active_bits;
 		int start = encode_space*value;
-		int end = start + encode_length;
+		int end = start + active_bits;
 		xt::xarray<bool> res = xt::zeros<bool>({sdr_length});
 		xt::view(res, xt::range(start, end))  = true;
 		return res;
@@ -46,19 +46,19 @@ struct ScalarEncoder
 
 	void setMiniumValue(float val) {min_val = val;}
 	void setMaximumValue(float val) {max_val = val;}
-	void setEncodeLengt(size_t val) {encode_length = val;}
+	void setEncodeLengt(size_t val) {active_bits = val;}
 	void setSDRLength(size_t val) {sdr_length = val;}
 
 	float miniumValue() const {return min_val;}
 	float maximumValue() const {return max_val;}
-	size_t encodeLength() const {return encode_length;}
+	size_t encodeLength() const {return active_bits;}
 	size_t sdrLength() const {return sdr_length;}
 
 
 protected:
 	float min_val = 0;
 	float max_val = 1;
-	size_t encode_length = 8;
+	size_t active_bits = 8;
 	size_t sdr_length = 32;
 };
 
@@ -110,9 +110,9 @@ protected:
 
 
 //Handy encode functions
-inline xt::xarray<bool> encodeScalar(float value, float minval, float maxval, size_t encode_len, size_t width)
+inline xt::xarray<bool> encodeScalar(float value, float minval, float maxval, size_t result_sdr_length, size_t num_active_bits)
 {
-	ScalarEncoder e(minval, maxval, encode_len, width);
+	ScalarEncoder e(minval, maxval, result_sdr_length, num_active_bits);
 	return e.encode(value);
 }
 

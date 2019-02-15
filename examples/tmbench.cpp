@@ -35,7 +35,7 @@ std::vector<xt::xarray<bool>> generateRandomData(size_t input_length, size_t num
 	static std::mt19937 rng;
 	std::uniform_real_distribution<float> dist(0, 1);
 	for(size_t i=0;i<num_data;i++)
-		res.push_back(encodeScalar(dist(rng), 0, 1, input_length*0.15, input_length));
+		res.push_back(encodeScalar(dist(rng), 0, 1, input_length, input_length*0.15));
 	return res;
 }
 

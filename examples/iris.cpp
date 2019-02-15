@@ -29,10 +29,10 @@ template <typename T>
 xt::xarray<bool> makeSDR(const T& v)
 {
 	return xt::concatenate(xt::xtuple(
-		encodeScalar(v[0], 0,1,8,16),
-		encodeScalar(v[1], 0,1,8,16),
-		encodeScalar(v[2], 0,1,8,16),
-		encodeScalar(v[3], 0,1,8,16)
+		encodeScalar(v[1], 0,1,16,8),
+		encodeScalar(v[0], 0,1,16,8),
+		encodeScalar(v[2], 0,1,16,8),
+		encodeScalar(v[3], 0,1,16,8)
 	));
 }
 
