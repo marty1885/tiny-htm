@@ -41,7 +41,7 @@ std::vector<xt::xarray<bool>> generateRandomData(size_t input_length, size_t num
 	static std::mt19937 rng;
 	std::uniform_real_distribution<float> dist(0, 1);
 
-	#pragma omp parallel for
+	#pragma omp parallel for num_threads(8)
 	for(size_t i=0;i<num_data;i++)
 		res[i] = encodeScalar(dist(rng), 0, 1, input_length, input_length*0.15);
 	return res;
@@ -65,4 +65,5 @@ int main()
 			std::cout << input_len << " bits per SDR, " << threads << " threads: " << t/num_data*1000 << "ms per forward" << std::endl;
 		}
 	}
+
 }

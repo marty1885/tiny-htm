@@ -271,7 +271,7 @@ struct Cells
 	{
 		xt::xarray<uint32_t> res = xt::xarray<uint32_t>::from_shape(shape());
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(guided)
 		for(size_t i=0;i<size();i++) {
 			const auto& connections = connections_[i];
 			const auto& permence = permence_[i];
@@ -467,16 +467,19 @@ struct SpatialPooler
 	float global_density_ = 0.15;
 };
 
-//Need optimization here. Make it parallel
 xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x)
 {
 	assert(s.dimension() == x.dimension()+1);
 	assert(s.size()/s.shape().back() == x.size());
-	xt::xarray<bool> res = s;
+	xt::xarray<bool> res = xt::xarray<bool>::from_shape(s.shape());
 	size_t column_size = res.shape().back();
 
 	#pragma omp parallel for
 	for(size_t i=0;i<res.size()/column_size;i++) {
+		for(size_t j=0;j<column_size;j++)
+			res[i*column_size+j] = s[i*column_size+j];
+
+
 		if(x[i] == false)
 			continue;
 
