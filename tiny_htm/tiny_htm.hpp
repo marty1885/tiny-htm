@@ -247,7 +247,7 @@ struct Cells
 
 		for(size_t i=0;i<cell_pos.size();i++)
 			assert(cell_pos[i] < shape()[i]);
-		if(connection_list.size() == max_connection_per_cell_) throw std::runtime_error("Synapes are full in cells");
+		if(connection_list.size() == max_connection_per_cell_) return;//throw std::runtime_error("Synapes are full in cells");
 		/*{
 			//Find the weakest synapse and roverrite it
 			size_t min_index = 0;
@@ -315,31 +315,32 @@ struct Cells
 	void growSynapse(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_init)
 	{
 		assert(learn.size() == size()); //A loose check
-		std::vector<std::vector<size_t>> all_on_bits;
+		std::vector<size_t> all_on_bits;
 		for(size_t i=0;i<x.size();i++) {
 			if(x[i] == true)
-				all_on_bits.push_back(foldIndex(i, as<std::vector<size_t>>(x.shape())));
+				all_on_bits.push_back(i);
 		}
 		if(all_on_bits.size() == 0)
 			return;
+		const auto xshape = x.shape(); //Reduce recreating the same object
+
 		#pragma omp parallel for
 		for(size_t i=0;i<learn.size();i++) {
 			if(learn[i] == false)
 				continue;
 
-			std::vector<size_t> cell_index = foldIndex(i, as<std::vector<size_t>>(shape()));
+			std::vector<size_t> cell_index = foldIndex(i, shape());
 			auto& connections = connections_[i];
 
 			for(const auto& input : all_on_bits) {
 				if(connections.size() == max_connection_per_cell_) //Don't make new connections if full
 					break;
-				if(std::find_if(connections.begin(), connections.end(), [&input](const auto& a) {
-					if(a.size() != input.size()) return false;
-					return std::equal(a.begin(), a.end(), input.begin());
+				if(std::find_if(connections.begin(), connections.end(), [&](const auto& a) {
+					return unfoldIndex(a, xshape) == input;
 					}) != connections.end()) 
 					continue;
 				
-				connect(input, cell_index, perm_init);
+				connect(foldIndex(input, x.shape()), cell_index, perm_init);
 			}
 		}
 	}

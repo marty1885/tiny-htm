@@ -61,7 +61,7 @@ int main()
 
 		for(int threads : num_threads) {
 			omp_set_num_threads(threads);
-			float t = benchmarkTemporalMemory({input_len}, input_data, 1);
+			float t = benchmarkTemporalMemory({input_len}, input_data, 10);
 			std::cout << input_len << " bits per SDR, " << threads << " threads: " << t/num_data*1000 << "ms per forward" << std::endl;
 		}
 	}

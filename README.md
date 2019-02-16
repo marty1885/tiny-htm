@@ -41,6 +41,7 @@ make install
 * [ ] Performance optimization
   * [x] Overhead reduction.
   * [x] benchmark tools
+  * Still way slower than NuPIC.core
 * [ ] Parallel algorithm execution
   * [x] Add OpenMP support.
 * [ ] Saving the models
