@@ -239,18 +239,14 @@ struct Cells
 		return as<std::vector<size_t>>(connections_.shape());
 	}
 
-	void connect(const std::vector<size_t>& input_pos, const std::vector<size_t>& input_shape, const std::vector<size_t>& cell_pos, float initial_permence)
+	void connect(size_t input_pos, size_t cell_pos, float initial_permence)
 	{
-		assert(cell_pos.size() == shape().size());
-		auto& connection_list = ndIndexing(connections_, cell_pos);
-		auto& permence_list = ndIndexing(permence_, cell_pos);
-		size_t input_index = unfoldIndex(input_pos, input_shape);
+		auto& connection_list = connections_[cell_pos];
+		auto& permence_list = permence_[cell_pos];
 
-		for(size_t i=0;i<cell_pos.size();i++)
-			assert(cell_pos[i] < shape()[i]);
 		if(connection_list.size() == max_connection_per_cell_) return;//throw std::runtime_error("Synapes are full in cells");
 		
-		connection_list.push_back(input_index);
+		connection_list.push_back(input_pos);
 		permence_list.push_back(initial_permence);
 	}
 
@@ -309,25 +305,25 @@ struct Cells
 		}
 		if(all_on_bits.size() == 0)
 			return;
-		const auto xshape = x.shape(); //Reduce recreating the same object
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(guided) //TODO: guided might not be the best for cases with large amount of cells
 		for(size_t i=0;i<learn.size();i++) {
 			if(learn[i] == false)
 				continue;
 
-			std::vector<size_t> cell_index = foldIndex(i, shape());
 			auto& connections = connections_[i];
+
+			std::vector<bool> connection_list(learn.size());
+			for(size_t i=0;i<connections.size();i++)
+				connection_list[connections[i]] = true;
 
 			for(const auto& input : all_on_bits) {
 				if(connections.size() == max_connection_per_cell_) //Don't make new connections if full
 					break;
-				if(std::find_if(connections.begin(), connections.end(), [&](const auto& a) {
-					return a == input;
-					}) != connections.end()) 
+				if(connection_list[input] == true)
 					continue;
 				
-				connect(foldIndex(input, x.shape()), as<std::vector<size_t>>(x.shape()), cell_index, perm_init);
+				connect(input, i, perm_init);
 			}
 		}
 	}
