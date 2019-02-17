@@ -225,8 +225,8 @@ struct Cells
 	Cells(std::vector<size_t> cell_shape, size_t max_connection_per_cell)
 		: max_connection_per_cell_(max_connection_per_cell)
 	{
-		connections_ = decltype(connections_)::from_shape(as<xt::xarray<float>::shape_type>(cell_shape));
-		permence_ = decltype(permence_)::from_shape(as<xt::xarray<float>::shape_type>(cell_shape));
+		connections_ = decltype(connections_)::from_shape(as<decltype(connections_)::shape_type>(cell_shape));
+		permence_ = decltype(permence_)::from_shape(as<decltype(permence_)::shape_type>(cell_shape));
 	}
 
 	size_t size() const
@@ -239,31 +239,18 @@ struct Cells
 		return as<std::vector<size_t>>(connections_.shape());
 	}
 
-	void connect(const std::vector<size_t>& input_pos, const std::vector<size_t>& cell_pos, float initial_permence)
+	void connect(const std::vector<size_t>& input_pos, const std::vector<size_t>& input_shape, const std::vector<size_t>& cell_pos, float initial_permence)
 	{
 		assert(cell_pos.size() == shape().size());
 		auto& connection_list = ndIndexing(connections_, cell_pos);
 		auto& permence_list = ndIndexing(permence_, cell_pos);
+		size_t input_index = unfoldIndex(input_pos, input_shape);
 
 		for(size_t i=0;i<cell_pos.size();i++)
 			assert(cell_pos[i] < shape()[i]);
 		if(connection_list.size() == max_connection_per_cell_) return;//throw std::runtime_error("Synapes are full in cells");
-		/*{
-			//Find the weakest synapse and roverrite it
-			size_t min_index = 0;
-			float min_value = permence_list[0];
-			for(size_t i=1;i<connection_list.size();i++) {
-				if(min_value > permence_list[i]) {
-					min_value = permence_list[i];
-					min_index = i;
-				}
-
-				connection_list[min_index] = input_pos;
-				permence_list[min_index] = initial_permence;
-			}
-		}*/
 		
-		connection_list.push_back(input_pos);
+		connection_list.push_back(input_index);
 		permence_list.push_back(initial_permence);
 	}
 
@@ -281,7 +268,7 @@ struct Cells
 			for(size_t j=0;j<connections.size();j++) {
 				if(permence[j] < 0.21)
 					continue;
-				bool bit = ndIndexing(x, connections[j]);
+				bool bit = x[connections[j]];
 				score += bit;
 			}
 			res[i] = score;
@@ -302,7 +289,7 @@ struct Cells
 			const auto& connections = connections_[i];
 			auto& permence = permence_[i];
 			for(size_t j=0;j<connections.size();j++) {
-				bool bit = ndIndexing(x, connections[j]);
+				bool bit = x[connections[j]];
 				if(bit == true)
 					permence[j] += perm_inc;
 				else
@@ -336,11 +323,11 @@ struct Cells
 				if(connections.size() == max_connection_per_cell_) //Don't make new connections if full
 					break;
 				if(std::find_if(connections.begin(), connections.end(), [&](const auto& a) {
-					return unfoldIndex(a, xshape) == input;
+					return a == input;
 					}) != connections.end()) 
 					continue;
 				
-				connect(foldIndex(input, x.shape()), cell_index, perm_init);
+				connect(foldIndex(input, x.shape()), as<std::vector<size_t>>(x.shape()), cell_index, perm_init);
 			}
 		}
 	}
@@ -356,14 +343,14 @@ struct Cells
 			std::vector<size_t> connection_indices;
 			connection_indices.reserve(connections.size());
 			for(const auto& c : connections)
-				connection_indices.push_back(unfoldIndex(c, shape()));
+				connection_indices.push_back(c);
 			auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
 			connection_indices = apply_permutation(connection_indices, p);
 			permence = apply_permutation(permence, p);
 
 			assert(connection_indices.size() == connections.size());
 			for(size_t i=0;i<connection_indices.size();i++)
-				connections[i] = foldIndex(connection_indices[i], shape());
+				connections[i] = connection_indices[i];
 
 		}
 	}
@@ -387,7 +374,7 @@ struct Cells
 		}
 	}
 
-	xt::xarray<std::vector<std::vector<size_t>>> connections_;
+	xt::xarray<std::vector<size_t>> connections_;
 	xt::xarray<std::vector<float>> permence_;
 	size_t max_connection_per_cell_;
 };
@@ -411,6 +398,14 @@ xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 	return res;
 }
 
+std::vector<size_t> vector_range(size_t start, size_t end)
+{
+	std::vector<size_t> v(end-start);
+	for(size_t i=0;i<end-start;i++)
+		v[i] = i;
+	return v;
+}
+
 //TODO: implement boosting, topology. The SP breaks spatial infomation tho
 struct SpatialPooler
 {
@@ -422,8 +417,8 @@ struct SpatialPooler
 		
 		//Initalize potential pool
 		std::mt19937 rng(seed);
-		std::vector<std::vector<size_t>> all_input_cell = allPosition(input_shape);
 		size_t potential_pool_connections = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>());
+		std::vector<size_t> all_input_cell = vector_range(0, potential_pool_connections);
 		for(size_t i=0;i<cells_.size();i++) {
 			auto& connections = cells_.connections_[i];
 			auto& permence = cells_.permence_[i];
