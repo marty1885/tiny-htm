@@ -406,25 +406,28 @@ std::vector<size_t> vector_range(size_t start, size_t end)
 struct SpatialPooler
 {
 	SpatialPooler(std::vector<size_t> input_shape, std::vector<size_t> output_shape, float potential_pool_pct=0.75, size_t seed=42)
-		: cells_(output_shape, std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>()))
+		: cells_(output_shape, std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>())*potential_pool_pct)
 	{
 		if(potential_pool_pct > 1 or potential_pool_pct < 0)
 			throw std::runtime_error("potential_pool_pct must be between 0~1, but get" + std::to_string(potential_pool_pct));
 		
 		//Initalize potential pool
 		std::mt19937 rng(seed);
-		size_t potential_pool_connections = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>());
-		std::vector<size_t> all_input_cell = vector_range(0, potential_pool_connections);
+		size_t input_cell_num = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>());
+		size_t potential_pool_connections = input_cell_num*potential_pool_pct;
+		std::vector<size_t> all_input_cell = vector_range(0, input_cell_num);
 		for(size_t i=0;i<cells_.size();i++) {
 			auto& connections = cells_.connections_[i];
 			auto& permence = cells_.permence_[i];
+			connections.resize(potential_pool_connections);
+			permence.resize(potential_pool_connections);
 
 			std::shuffle(all_input_cell.begin(), all_input_cell.end(), rng);
 			std::normal_distribution<float> dist(0.5, 1);
 			auto clamp =[](float x) {return std::min(1.f, std::max(x, 0.f));};
 			for(size_t j=0;j<potential_pool_connections;j++) {
-				connections.push_back(all_input_cell[j]);
-				permence.push_back(clamp(dist(rng)));
+				connections[j] = all_input_cell[j];
+				permence[j] = clamp(dist(rng));
 
 				assert(connections.size() == permence.size());
 				assert(connections.size() == j+1);
