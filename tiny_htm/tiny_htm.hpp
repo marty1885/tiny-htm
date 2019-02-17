@@ -491,18 +491,22 @@ xt::xarray<bool> selectLearningCell(const xt::xarray<bool>& x)
 	static std::mt19937 rng;
 	size_t column_size = x.shape().back();
 	std::uniform_int_distribution<size_t> dist(0, column_size-1);
-	xt::xarray<bool> res = x;
+	xt::xarray<bool> res = xt::xarray<bool>::from_shape(x.shape());
 
 	#pragma omp parallel for
 	for(size_t i=0;i<x.size()/column_size;i++) {
 		size_t sum = 0;
 		for(size_t j=0;j<column_size;j++)
-			sum += x.at(i, j);
+			sum += x[i*column_size+j];
 
 		if(sum == column_size) {
 			for(size_t j=0;j<column_size;j++)
-				res.at(i, j) = false;
-			res.at(i, dist(rng)) = true;
+				res[i*column_size+j] = false;
+			res[i*column_size+dist(rng)] = true;
+		}
+		else {
+			for(size_t j=0;j<column_size;j++)
+				res[i*column_size+j] = x[i*column_size+j];
 		}
 	}
 	return res;
