@@ -336,17 +336,9 @@ struct Cells
 		for(size_t i=0;i<connections_.size();i++) {
 			auto& connections = connections_[i];
 			auto& permence = permence_[i];
-			std::vector<size_t> connection_indices;
-			connection_indices.reserve(connections.size());
-			for(const auto& c : connections)
-				connection_indices.push_back(c);
-			auto p = sort_permutation(connection_indices, [](auto a, auto b){return a<b;});
-			connection_indices = apply_permutation(connection_indices, p);
+			auto p = sort_permutation(connections, [](auto a, auto b){return a<b;});
+			connections = apply_permutation(connections, p);
 			permence = apply_permutation(permence, p);
-
-			assert(connection_indices.size() == connections.size());
-			for(size_t i=0;i<connection_indices.size();i++)
-				connections[i] = connection_indices[i];
 
 		}
 	}
