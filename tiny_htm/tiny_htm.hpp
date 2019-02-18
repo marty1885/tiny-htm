@@ -8,7 +8,6 @@
 #include <vector>
 #include <algorithm>
 #include <random>
-#include <mutex>
 
 #include <assert.h>
 
@@ -429,9 +428,6 @@ struct SpatialPooler
 			for(size_t j=0;j<potential_pool_connections;j++) {
 				connections[j] = all_input_cell[j];
 				permence[j] = clamp(dist(rng));
-
-				assert(connections.size() == permence.size());
-				assert(connections.size() == j+1);
 			}
 		}
 		cells_.sortSynapse();

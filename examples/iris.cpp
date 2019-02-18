@@ -50,18 +50,18 @@ int main()
 	//std::cout << csv_content << std::endl;
 
 	//Some crazy C++ data processing
-	xt::xarray<float> dataset = xt::zeros<float>({csv_content.shape()[0]-1, csv_content.shape()[1]-1});
+	xt::xarray<float> dataset = xt::zeros<float>({csv_content.shape()[0]-1, csv_content.shape()[1]});
 	std::map<std::string, int> category_map;
 	category_map["Iris-setosa"] = 0;
 	category_map["Iris-versicolor"] = 1;
 	category_map["Iris-virginica"] = 2;
 
 	for(size_t i=1;i<csv_content.shape()[0];i++) { // Ignore the first col. It contains the description
-		for(size_t j=1;j<csv_content.shape()[1];j++) {
+		for(size_t j=0;j<csv_content.shape()[1];j++) {
 			if(j != csv_content.shape()[1]-1)
-				xt::view(dataset, i-1, j-1) = std::stof(xt::view(csv_content, i,j)[0]);
+				xt::view(dataset, i-1, j) = std::stof(xt::view(csv_content, i,j)[0]);
 			else
-				xt::view(dataset, i-1, j-1) = category_map[xt::view(csv_content, i,j)[0]];
+				xt::view(dataset, i-1, j) = category_map[xt::view(csv_content, i,j)[0]];
 		}
 	}
 
