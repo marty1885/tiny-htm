@@ -8,7 +8,7 @@
 #include <vector>
 #include <algorithm>
 #include <random>
-#include <queue>
+#include <mutex>
 
 #include <assert.h>
 
@@ -250,7 +250,7 @@ struct Cells
 		permence_list.push_back(initial_permence);
 	}
 
-	xt::xarray<uint32_t> calcOverlap(const xt::xarray<bool>& x) const
+	xt::xarray<uint32_t> calcOverlap(const xt::xarray<bool>& x, float connected_thr) const
 	{
 		xt::xarray<uint32_t> res = xt::xarray<uint32_t>::from_shape(shape());
 
@@ -262,7 +262,7 @@ struct Cells
 			assert(connections.size() == permence.size());
 			uint32_t score = 0;
 			for(size_t j=0;j<connections.size();j++) {
-				if(permence[j] < 0.21)
+				if(permence[j] < connected_thr)
 					continue;
 				bool bit = x[connections[j]];
 				score += bit;
@@ -324,7 +324,9 @@ struct Cells
 					break;
 				if(connection_list[input] == true)
 					continue;
-				
+
+				//#pragma omp critical //No need to make it a critial session as we are modifing 
+				//                     //Different list of synapses every tiem. No rac condition will occur
 				connect(input, i, perm_init);
 			}
 		}
@@ -437,25 +439,28 @@ struct SpatialPooler
 
 	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
 	{
-		xt::xarray<uint32_t> overlap_score = cells_.calcOverlap(x);
+		xt::xarray<uint32_t> overlap_score = cells_.calcOverlap(x, 0.21);
 		xt::xarray<bool> res = globalInhibition(overlap_score, global_density_);
 
 		if(learn == true)
-			cells_.learnCorrilation(x, res, permence_incerment_, permence_decerment_);
+			cells_.learnCorrilation(x, res, permanence_incerment_, permanence_decerment_);
 		return res;
 	}
 
 	Cells cells_;
 
 	//All the getter and seters
-	void setPermenceIncerment(float v) {permence_incerment_ = v;}
-	void setPermenceDecerment(float v) {permence_decerment_ = v;}
+	void setPermanenceIncerment(float v) {permanence_incerment_ = v;}
+	void setPermanenceDecerment(float v) {permanence_decerment_ = v;}
+	void setConnectedPermanence(float v) {connected_permanence_ = v;}
 
-	float getPermenceIncerment() const {return permence_incerment_;}
-	float getPermenceDecerment() const {return permence_decerment_;}
+	float permanenceIncerment() const {return permanence_incerment_;}
+	float permanenceDecerment() const {return permanence_decerment_;}
+	float connectedPermanence() const {return permanence_decerment_;}
 
-	float permence_incerment_ = 0.1f;
-	float permence_decerment_ = 0.1f;
+	float permanence_incerment_ = 0.1f;
+	float permanence_decerment_ = 0.1f;
+	float connected_permanence_ = 0.15;
 
 	float global_density_ = 0.15;
 };
@@ -471,7 +476,6 @@ xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x
 	for(size_t i=0;i<res.size()/column_size;i++) {
 		for(size_t j=0;j<column_size;j++)
 			res[i*column_size+j] = s[i*column_size+j];
-
 
 		if(x[i] == false)
 			continue;
@@ -529,13 +533,13 @@ struct TemporalMemory
 	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
 	{
 		xt::xarray<bool> active_cells = applyBurst(predictive_cells_, x);
-		xt::xarray<uint32_t> overlap = cells_.calcOverlap(active_cells);
+		xt::xarray<uint32_t> overlap = cells_.calcOverlap(active_cells, connected_permanence_);
 		predictive_cells_ = (overlap > 2); //TODO: Arbitrary value
 		if(learn == true) {
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
 			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
-			cells_.learnCorrilation(last_active, apply_learning, permence_incerment_, permence_decerment_);
-			cells_.growSynapse(last_active, apply_learning, initial_permence_);
+			cells_.learnCorrilation(last_active, apply_learning, permanence_incerment_, permanence_decerment_);
+			cells_.growSynapse(last_active, apply_learning, initial_permanence_);
 		}
 		active_cells_ = active_cells;
 		return xt::sum(predictive_cells_, -1);
@@ -553,15 +557,20 @@ struct TemporalMemory
 	}
 
 	//All the getter and seters
-	void setPermenceIncerment(float v) {permence_incerment_ = v;}
-	void setPermenceDecerment(float v) {permence_decerment_ = v;}
+	void setPermanenceIncerment(float v) {permanence_incerment_ = v;}
+	void setPermanenceDecerment(float v) {permanence_decerment_ = v;}
+	void setInitialPermanence(float v) {initial_permanence_ = v;}
+	void setConnectedPermanence(float v) {connected_permanence_ = v;}
 
-	float getPermenceIncerment() const {return permence_incerment_;}
-	float getPermenceDecerment() const {return permence_decerment_;}
+	float permanenceIncerment() const {return permanence_incerment_;}
+	float permanenceDecerment() const {return permanence_decerment_;}
+	float initialPermanence() const {return initial_permanence_;}
+	float connectedPermanence() const {return permanence_decerment_;}
 
-	float permence_incerment_ = 0.1f;
-	float permence_decerment_ = 0.1f;
-	float initial_permence_ = 0.5f;
+	float permanence_incerment_ = 0.1f;
+	float permanence_decerment_ = 0.1f;
+	float initial_permanence_ = 0.21f;
+	float connected_permanence_ = 0.15;
 
 	Cells cells_;
 	xt::xarray<bool> predictive_cells_;
