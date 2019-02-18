@@ -312,6 +312,8 @@ struct Cells
 				continue;
 
 			auto& connections = connections_[i];
+			if(connections.size() == max_connection_per_cell_)
+				continue;
 
 			std::vector<bool> connection_list(learn.size());
 			for(size_t i=0;i<connections.size();i++)
@@ -377,19 +379,24 @@ struct Cells
 
 xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 {
-	std::vector<std::pair<int32_t, size_t>> v;
+	std::vector<std::pair<uint32_t, size_t>> v;
 	size_t target_size = x.size()*density;
 	v.reserve(target_size);//Some sane value
 	for(size_t i=0;i<x.size();i++) {
 		if(x[i] != 0)
 			v.push_back({x[i], i});
 	}
-	std::sort(v.begin(), v.end(), [](auto& a, auto&b){return a.first > b.first;});
+	std::sort(v.begin(), v.end(), [](const auto& a, const auto&b){return a.first > b.first;});
 
-	xt::xarray<bool> res = xt::zeros<bool>(x.shape());
+	xt::xarray<bool> res = xt::xarray<bool>::from_shape(x.shape());
+	#pragma omp parallel for
+	for(size_t i=0;i<res.size();i++)
+		res[i] = false;
 	uint32_t min_accept_val = v[std::min(target_size, v.size())].first;
+	auto it = std::upper_bound(v.begin(), v.end(), min_accept_val, [](const auto& a, const auto& b){return a > b.first;});
+	size_t stop_index = std::distance(v.begin(), it);
 
-	for(size_t i=0;(uint32_t)v[i].first >= min_accept_val && i < v.size();i++)
+	for(size_t i=0;i<stop_index;i++)
 		res[v[i].second] = true;
 	return res;
 }
