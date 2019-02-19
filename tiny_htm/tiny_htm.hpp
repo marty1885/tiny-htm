@@ -63,7 +63,7 @@ protected:
 	size_t sdr_length = 32;
 };
 
-//Unlike in NuPIC. The CategoryEncoder in HTMHelper does NOT include space for
+//Unlike in NuPIC. The CategoryEncoder in tinyhtm does NOT include space for
 //an Unknown category. And the encoding is done by passing a size_t representing
 //the category instread of a string.
 struct CategoryEncoder
@@ -325,7 +325,7 @@ struct Cells
 					continue;
 
 				//#pragma omp critical //No need to make it a critial session as we are modifing 
-				//                     //Different list of synapses every tiem. No rac condition will occur
+				//                     //Different list of synapses every tiem. No race condition will occur
 				connect(input, i, perm_init);
 			}
 		}

@@ -36,13 +36,20 @@ make install
 
 ### Spatial Pooler
 * [ ] Boosting
+* [ ] Topology
+
+### Temporal Memory
+* [ ] Column inhibition (not biologically plossible)
+
+### HTM Research
+* [ ] Column Pooler
 
 ### Misc
 * [ ] Performance optimization
   * [x] Overhead reduction.
   * [x] benchmark tools
-  * Still way slower than NuPIC.core
-* [ ] Parallel algorithm execution
+  * [x] TM 2.43x faster then NuPIC.cpp on single thread
+  * [ ] SIMD-ize algorithm if possible
   * [x] Add OpenMP support.
 * [ ] Saving the models
 * [ ] Make hyper parameter changable
