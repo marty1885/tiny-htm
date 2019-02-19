@@ -31,6 +31,8 @@ make install
 
 ### Encoders
 * [ ] Grid Cells
+  * [x] GridCellEncoder2D
+  * [ ] GridCellEncoder1D
 * [ ] Date time
 * [ ] RDSE
 
