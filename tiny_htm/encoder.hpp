@@ -99,15 +99,6 @@ protected:
 	size_t encode_length;
 };
 
-float random(float min=0, float max=1)
-{
-	static std::random_device rd;
-	static std::mt19937 eng(rd());
-	std::uniform_real_distribution<float> dist;
-	float diff = max-min;
-	return diff*dist(eng) + min;
-}
-
 int roundCoord(float x)
 {
 	int v = (int)x + ((x-(int)x) > 0.5 ? 1 : -1);
@@ -122,13 +113,14 @@ inline decltype(auto) matmul2D(const T& a, const T& b)
 	return xt::sum(a*b, -1);
 }
 
-//TODO: remove global RNG to make object predictable
 class GridCellUnit2D
 {
 public:
-	GridCellUnit2D(xt::xtensor<size_t, 1> module_shape={4,4}, float scale_min=6, float scale_max=25)
+	GridCellUnit2D(xt::xtensor<size_t, 1> module_shape={4,4}, float scale_min=6, float scale_max=25, size_t seed=42)
 		: border_len_(module_shape)
 	{
+		std::mt19937 rng(seed);
+		auto random = [&](float min, float max){std::uniform_real_distribution<float> dist(min, max); return dist(rng);};
 		float theta = random(0,2*xt::numeric_constants<float>::PI);
 		scale_ = random(scale_min, scale_max);
 		bias_ = {random(0, border_len_[0]), random(0, border_len_[1])};
@@ -170,10 +162,11 @@ public:
 class GridCellEncoder2D
 {
 public:
-	GridCellEncoder2D(int num_modules_ = 32, xt::xtensor<size_t, 1> module_shape={4,4}, float scale_min=6, float scale_max=25)
+	GridCellEncoder2D(int num_modules_ = 32, xt::xtensor<size_t, 1> module_shape={4,4}, float scale_min=6, float scale_max=25, size_t seed=42)
 	{
+		std::mt19937 rng(seed);
 		for(int i=0;i<num_modules_;i++)
-			units.push_back(GridCellUnit2D(module_shape, scale_min, scale_max));
+			units.push_back(GridCellUnit2D(module_shape, scale_min, scale_max, rng()));
 	}
 
 	xt::xarray<bool> encode(const xt::xtensor<float, 2>& pos) const
