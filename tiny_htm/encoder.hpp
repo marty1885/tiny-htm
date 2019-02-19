@@ -122,26 +122,25 @@ inline decltype(auto) matmul2D(const T& a, const T& b)
 	return xt::sum(a*b, -1);
 }
 
+//TODO: remove global RNG to make object predictable
 class GridCellUnit2D
 {
 public:
-	GridCellUnit2D()
+	GridCellUnit2D(xt::xtensor<size_t, 1> module_shape={4,4}, float scale_min=6, float scale_max=25)
+		: border_len_(module_shape)
 	{
-		border_len = {4, 4};
-		float scale_min = 6;
-		float scale_max = 25;
-		float theta = random(0,6.28);
-		scale = random(scale_min, scale_max);
-		bias = {random(0, 4), random(0, 4)};
-		transform_matrix = {{cosf(theta), -sinf(theta)}, {sinf(theta), cosf(theta)}};
+		float theta = random(0,2*xt::numeric_constants<float>::PI);
+		scale_ = random(scale_min, scale_max);
+		bias_ = {random(0, border_len_[0]), random(0, border_len_[1])};
+		transform_matrix_ = {{cosf(theta), -sinf(theta)}, {sinf(theta), cosf(theta)}};
 	}
 
 	xt::xarray<bool> encode(const xt::xtensor<float, 2>& pos) const
 	{
-		xt::xarray<bool> res = xt::zeros<bool>({border_len[0], border_len[1]});
+		xt::xarray<bool> res = xt::zeros<bool>({border_len_[0], border_len_[1]});
 		
 		//Wrap the position
-		auto grid_cord = xt::fmod(matmul2D(transform_matrix, pos)/scale+bias, border_len);
+		auto grid_cord = xt::fmod(matmul2D(transform_matrix_, pos)/scale_+bias_, border_len_);
 		assert(grid_coors.size() == 2);
 
 		//Set the nearest cell to active
@@ -159,22 +158,22 @@ public:
 
 	size_t encodeSize() const
 	{
-		return border_len[0] * border_len[1];
+		return border_len_[0] * border_len_[1];
 	}
 
-	xt::xtensor<float, 2> transform_matrix;
-	xt::xtensor<float, 1> border_len;
-	xt::xtensor<float, 1> bias;
-	float scale;
+	xt::xtensor<float, 2> transform_matrix_;
+	xt::xtensor<size_t, 1> border_len_;
+	xt::xtensor<float, 1> bias_;
+	float scale_;
 };
 
 class GridCellEncoder2D
 {
 public:
-	GridCellEncoder2D(int num_modules_ = 32)
+	GridCellEncoder2D(int num_modules_ = 32, xt::xtensor<size_t, 1> module_shape={4,4}, float scale_min=6, float scale_max=25)
 	{
 		for(int i=0;i<num_modules_;i++)
-			units.push_back(GridCellUnit2D());
+			units.push_back(GridCellUnit2D(module_shape, scale_min, scale_max));
 	}
 
 	xt::xarray<bool> encode(const xt::xtensor<float, 2>& pos) const
