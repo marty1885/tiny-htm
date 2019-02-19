@@ -13,6 +13,8 @@
 
 #include <assert.h>
 
+#include <omp.h>
+
 namespace th // namespace tiny_htm
 {
 
@@ -203,6 +205,7 @@ struct Cells
 		}
 		if(all_on_bits.size() == 0)
 			return;
+		std::vector<std::vector<bool>> connection_lists(omp_get_max_threads(), std::vector<bool>(learn.size()));
 
 		#pragma omp parallel for schedule(guided) //TODO: guided might not be the best for cases with large amount of cells
 		for(size_t i=0;i<learn.size();i++) {
@@ -213,7 +216,13 @@ struct Cells
 			if(connections.size() == max_connection_per_cell_)
 				continue;
 
-			std::vector<bool> connection_list(learn.size());
+			//std::vector<bool> connection_list(learn.size());
+			auto& connection_list = connection_lists[omp_get_thread_num()];
+
+			#pragma omp simd
+			for(size_t i=0;i<connections.size();i++)
+					connection_list[i] = false;
+
 			for(size_t i=0;i<connections.size();i++)
 				connection_list[connections[i]] = true;
 

@@ -133,7 +133,7 @@ public:
 		
 		//Wrap the position
 		auto grid_cord = xt::fmod(matmul2D(transform_matrix_, pos)/scale_+bias_, border_len_);
-		assert(grid_coors.size() == 2);
+		assert(grid_cord.size() == 2);
 
 		//Set the nearest cell to active
 		xt::view(res, (int)grid_cord[1], (int)grid_cord[0]) = 1;
