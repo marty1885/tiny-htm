@@ -37,8 +37,8 @@ struct ScalarEncoder
 
 	xt::xarray<bool> encode(float value) const
 	{
-		float encode_space = sdr_length - active_bits;
-		int start = encode_space*value;
+		float encode_space = (sdr_length - active_bits)/(max_val - min_val);
+		int start = encode_space*(value-min_val);
 		int end = start + active_bits;
 		xt::xarray<bool> res = xt::zeros<bool>({sdr_length});
 		xt::view(res, xt::range(start, end))  = true;
