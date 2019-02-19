@@ -7,6 +7,7 @@
 #include <xtensor/xrandom.hpp>
 
 #include <tiny_htm/tiny_htm.hpp>
+using namespace th;
 
 #include <string>
 #include <fstream>

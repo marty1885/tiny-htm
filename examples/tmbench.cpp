@@ -1,4 +1,5 @@
 #include <tiny_htm/tiny_htm.hpp>
+using namespace th;
 
 #include <vector>
 #include <chrono>

@@ -53,6 +53,7 @@ make install
   * [x] Add OpenMP support.
 * [ ] Saving the models
 * [ ] Make hyper parameter changable
+* [ ] Build on MSVC
 
 
 ### Documentation

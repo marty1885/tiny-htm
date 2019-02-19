@@ -9,118 +9,17 @@
 #include <algorithm>
 #include <random>
 
+#include "tiny_htm/encoder.hpp"
+
 #include <assert.h>
+
+namespace th // namespace tiny_htm
+{
 
 template<typename ResType, typename InType>
 inline ResType as(const InType& shape)
 {
 	return ResType(shape.begin(), shape.end());
-}
-
-//Your standard ScalarEncoder.
-struct ScalarEncoder
-{
-	ScalarEncoder() = default;
-	ScalarEncoder(float minval, float maxval, size_t result_sdr_length, size_t num_active_bits)
-		: min_val(minval), max_val(maxval), active_bits(num_active_bits), sdr_length(result_sdr_length)
-	{
-		if(min_val > max_val)
-			throw std::runtime_error("ScalarEncoder error: min_val > max_val");
-		if(result_sdr_length < num_active_bits)
-			throw std::runtime_error("ScalarEncoder error: result_sdr_length < num_active_bits");
-	}
-
-	xt::xarray<bool> operator() (float value) const
-	{
-		return encode(value);
-	}
-
-	xt::xarray<bool> encode(float value) const
-	{
-		float encode_space = (sdr_length - active_bits)/(max_val - min_val);
-		int start = encode_space*(value-min_val);
-		int end = start + active_bits;
-		xt::xarray<bool> res = xt::zeros<bool>({sdr_length});
-		xt::view(res, xt::range(start, end))  = true;
-		return res;
-	}
-
-	void setMiniumValue(float val) {min_val = val;}
-	void setMaximumValue(float val) {max_val = val;}
-	void setEncodeLengt(size_t val) {active_bits = val;}
-	void setSDRLength(size_t val) {sdr_length = val;}
-
-	float miniumValue() const {return min_val;}
-	float maximumValue() const {return max_val;}
-	size_t encodeLength() const {return active_bits;}
-	size_t sdrLength() const {return sdr_length;}
-
-
-protected:
-	float min_val = 0;
-	float max_val = 1;
-	size_t active_bits = 8;
-	size_t sdr_length = 32;
-};
-
-//Unlike in NuPIC. The CategoryEncoder in tinyhtm does NOT include space for
-//an Unknown category. And the encoding is done by passing a size_t representing
-//the category instread of a string.
-struct CategoryEncoder
-{
-	CategoryEncoder(size_t num_cat, size_t encode_len)
-		: num_category(num_cat), encode_length(encode_len)
-	{}
-
-	xt::xarray<bool> operator() (size_t category) const
-	{
-		return encode(category);
-	}
-
-	xt::xarray<bool> encode(size_t category) const
-	{
-		if(category > num_category)
-			throw std::runtime_error("CategoryEncoder: category > num_category");
-		xt::xarray<bool> res = xt::zeros<bool>({num_category, encode_length});
-		xt::view(res, category) = true;
-		return xt::flatten(res);
-	}
-
-	std::vector<size_t> decode(const xt::xarray<bool>& t)
-	{
-		std::vector<size_t> possible_category;
-		for(size_t i=0;i<num_category;i++) {
-			if(xt::sum(xt::view(t, xt::range(i*encode_length, (i+1)*encode_length)))[0] > 0)
-				possible_category.push_back(i);
-		}
-		//if(possible_category.size() == 0)
-		//	possible_category.push_back(0);
-		return possible_category;
-	}
-
-	void setNumCategorise(size_t num_cat) {num_category = num_cat;}
-	void setEncodeLengt(size_t val) {encode_length = val;}
-
-	size_t numCategories() const {return num_category;}
-	size_t encodeLength() const {return encode_length;} 
-	size_t sdrLength() const {return num_category*encode_length;}
-protected:
-	size_t num_category;
-	size_t encode_length;
-};
-
-
-//Handy encode functions
-inline xt::xarray<bool> encodeScalar(float value, float minval, float maxval, size_t result_sdr_length, size_t num_active_bits)
-{
-	ScalarEncoder e(minval, maxval, result_sdr_length, num_active_bits);
-	return e.encode(value);
-}
-
-inline xt::xarray<bool> encodeCategory(size_t category, size_t num_cat, size_t encode_len)
-{
-	CategoryEncoder e(num_cat, encode_len);
-	return e.encode(category);
 }
 
 template <typename ShapeType>
@@ -621,3 +520,5 @@ protected:
 	std::vector<xt::xarray<int>> stored_patterns;
 	std::vector<size_t> pattern_sotre_num;
 };
+
+}

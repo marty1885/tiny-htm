@@ -1,6 +1,7 @@
 #include <xtensor/xarray.hpp>
 
 #include <tiny_htm/tiny_htm.hpp>
+using namespace th;
 
 #include <string>
 
