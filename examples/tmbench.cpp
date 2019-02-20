@@ -21,10 +21,9 @@ float benchmarkTemporalMemory(const std::vector<size_t>& out_shape, const std::v
 			//Reorganize the synapses every N times for better perofmance
 			//This makes the memory access pattern more linear
 			j += 1;
-			if(j == 20) {
+			if(j%20 == 0) {
 				//tm.cells_.decaySynapse(0.05);
 				tm.organizeSynapse();
-				j = 0;
 			}
 		}
 

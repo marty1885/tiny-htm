@@ -195,6 +195,7 @@ struct Cells
 		}
 	}
 
+	// After some testing seems the `learn` parameter be copied by value is faster.
 	void growSynapse(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_init)
 	{
 		assert(learn.size() == size()); //A loose check
@@ -451,8 +452,8 @@ struct TemporalMemory
 
 	void reset()
 	{
-		predictive_cells_ = xt::zeros<bool>(cells_.shape());
-		active_cells_ = xt::zeros<bool>(cells_.shape());
+		predictive_cells_ = 0;
+		active_cells_ = 0;
 	}
 
 	void organizeSynapse()
