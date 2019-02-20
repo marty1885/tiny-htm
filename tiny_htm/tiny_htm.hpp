@@ -84,6 +84,17 @@ std::vector<std::vector<size_t>> allPosition(const std::vector<size_t>& input_sh
 }
 
 template <typename T, typename Compare>
+void sort_permutation_no_alloc(
+    const std::vector<T>& vec, std::vector<size_t>& p,
+    Compare compare)
+{
+	assert(p.size() == vec.size());
+	std::iota(p.begin(), p.end(), 0);
+	std::sort(p.begin(), p.end(),
+		[&](std::size_t i, std::size_t j){ return compare(vec[i], vec[j]); });
+}
+
+template <typename T, typename Compare>
 inline std::vector<std::size_t> sort_permutation(
     const std::vector<T>& vec,
     Compare compare)
@@ -104,6 +115,31 @@ std::vector<T> apply_permutation(
 	std::transform(p.begin(), p.end(), sorted_vec.begin(),
 		[&](std::size_t i){ return vec[i]; });
 	return sorted_vec;
+}
+
+template <typename T>
+void apply_permutation_in_place(
+    std::vector<T>& vec,
+    const std::vector<std::size_t>& p)
+{
+    std::vector<bool> done(vec.size());
+    for (std::size_t i = 0; i < vec.size(); ++i)
+    {
+        if (done[i])
+        {
+            continue;
+        }
+        done[i] = true;
+        std::size_t prev_j = i;
+        std::size_t j = p[i];
+        while (i != j)
+        {
+            std::swap(vec[prev_j], vec[j]);
+            done[j] = true;
+            prev_j = j;
+            j = p[j];
+        }
+    }
 }
 
 template <typename T>
@@ -179,7 +215,7 @@ struct Cells
 		assert(connections_.size() == learn.size()); // A loose check for the same shape
 		auto clamp = [](float x) {return std::min(1.f, std::max(x, 0.f));};
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(guided)
 		for(size_t i=0;i<connections_.size();i++) {
 			if(learn[i] == false)
 				continue;
@@ -246,16 +282,16 @@ struct Cells
 	{
 		assert(connections_.size() == permence_.size());
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(guided)
 		for(size_t i=0;i<connections_.size();i++) {
 			if(sorted_[i] == false)
 				continue;
 			auto& connections = connections_[i];
 			auto& permence = permence_[i];
-			//This allocates memory everytime, can definately be optimized
+			//Seems pre-allocating memory isn't very benifial
 			auto p = sort_permutation(connections, [](auto a, auto b){return a<b;});
-			connections = apply_permutation(connections, p);
-			permence = apply_permutation(permence, p);
+			apply_permutation_in_place(connections, p);
+			apply_permutation_in_place(permence, p);
 			sorted_[i] = true;
 		}
 	}
