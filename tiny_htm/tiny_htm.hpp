@@ -127,6 +127,7 @@ struct Cells
 	{
 		connections_ = decltype(connections_)::from_shape(as<decltype(connections_)::shape_type>(cell_shape));
 		permence_ = decltype(permence_)::from_shape(as<decltype(permence_)::shape_type>(cell_shape));
+		sorted_ = xt::zeros<bool>(as<decltype(connections_)::shape_type>(cell_shape));
 	}
 
 	size_t size() const
@@ -146,6 +147,7 @@ struct Cells
 
 		if(connection_list.size() == max_connection_per_cell_) return;//throw std::runtime_error("Synapes are full in cells");
 		
+		sorted_[cell_pos] = false;
 		connection_list.push_back(input_pos);
 		permence_list.push_back(initial_permence);
 	}
@@ -246,12 +248,15 @@ struct Cells
 
 		#pragma omp parallel for
 		for(size_t i=0;i<connections_.size();i++) {
+			if(sorted_[i] == false)
+				continue;
 			auto& connections = connections_[i];
 			auto& permence = permence_[i];
+			//This allocates memory everytime, can definately be optimized
 			auto p = sort_permutation(connections, [](auto a, auto b){return a<b;});
 			connections = apply_permutation(connections, p);
 			permence = apply_permutation(permence, p);
-
+			sorted_[i] = true;
 		}
 	}
 
@@ -276,6 +281,7 @@ struct Cells
 
 	xt::xarray<std::vector<size_t>> connections_;
 	xt::xarray<std::vector<float>> permence_;
+	xt::xarray<bool> sorted_;
 	size_t max_connection_per_cell_;
 };
 
