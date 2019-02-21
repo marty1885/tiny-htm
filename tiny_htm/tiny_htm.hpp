@@ -8,120 +8,20 @@
 #include <vector>
 #include <algorithm>
 #include <random>
-#include <queue>
+
+#include "tiny_htm/encoder.hpp"
 
 #include <assert.h>
+
+#include <omp.h>
+
+namespace th // namespace tiny_htm
+{
 
 template<typename ResType, typename InType>
 inline ResType as(const InType& shape)
 {
 	return ResType(shape.begin(), shape.end());
-}
-
-//Your standard ScalarEncoder.
-struct ScalarEncoder
-{
-	ScalarEncoder() = default;
-	ScalarEncoder(float minval, float maxval, size_t result_sdr_length, size_t num_active_bits)
-		: min_val(minval), max_val(maxval), active_bits(num_active_bits), sdr_length(result_sdr_length)
-	{
-		if(min_val > max_val)
-			throw std::runtime_error("ScalarEncoder error: min_val > max_val");
-		if(result_sdr_length < num_active_bits)
-			throw std::runtime_error("ScalarEncoder error: result_sdr_length < num_active_bits");
-	}
-
-	xt::xarray<bool> operator() (float value) const
-	{
-		return encode(value);
-	}
-
-	xt::xarray<bool> encode(float value) const
-	{
-		float encode_space = sdr_length - active_bits;
-		int start = encode_space*value;
-		int end = start + active_bits;
-		xt::xarray<bool> res = xt::zeros<bool>({sdr_length});
-		xt::view(res, xt::range(start, end))  = true;
-		return res;
-	}
-
-	void setMiniumValue(float val) {min_val = val;}
-	void setMaximumValue(float val) {max_val = val;}
-	void setEncodeLengt(size_t val) {active_bits = val;}
-	void setSDRLength(size_t val) {sdr_length = val;}
-
-	float miniumValue() const {return min_val;}
-	float maximumValue() const {return max_val;}
-	size_t encodeLength() const {return active_bits;}
-	size_t sdrLength() const {return sdr_length;}
-
-
-protected:
-	float min_val = 0;
-	float max_val = 1;
-	size_t active_bits = 8;
-	size_t sdr_length = 32;
-};
-
-//Unlike in NuPIC. The CategoryEncoder in HTMHelper does NOT include space for
-//an Unknown category. And the encoding is done by passing a size_t representing
-//the category instread of a string.
-struct CategoryEncoder
-{
-	CategoryEncoder(size_t num_cat, size_t encode_len)
-		: num_category(num_cat), encode_length(encode_len)
-	{}
-
-	xt::xarray<bool> operator() (size_t category) const
-	{
-		return encode(category);
-	}
-
-	xt::xarray<bool> encode(size_t category) const
-	{
-		if(category > num_category)
-			throw std::runtime_error("CategoryEncoder: category > num_category");
-		xt::xarray<bool> res = xt::zeros<bool>({num_category, encode_length});
-		xt::view(res, category) = true;
-		return xt::flatten(res);
-	}
-
-	std::vector<size_t> decode(const xt::xarray<bool>& t)
-	{
-		std::vector<size_t> possible_category;
-		for(size_t i=0;i<num_category;i++) {
-			if(xt::sum(xt::view(t, xt::range(i*encode_length, (i+1)*encode_length)))[0] > 0)
-				possible_category.push_back(i);
-		}
-		//if(possible_category.size() == 0)
-		//	possible_category.push_back(0);
-		return possible_category;
-	}
-
-	void setNumCategorise(size_t num_cat) {num_category = num_cat;}
-	void setEncodeLengt(size_t val) {encode_length = val;}
-
-	size_t numCategories() const {return num_category;}
-	size_t encodeLength() const {return encode_length;} 
-	size_t sdrLength() const {return num_category*encode_length;}
-protected:
-	size_t num_category;
-	size_t encode_length;
-};
-
-
-//Handy encode functions
-inline xt::xarray<bool> encodeScalar(float value, float minval, float maxval, size_t result_sdr_length, size_t num_active_bits)
-{
-	ScalarEncoder e(minval, maxval, result_sdr_length, num_active_bits);
-	return e.encode(value);
-}
-
-inline xt::xarray<bool> encodeCategory(size_t category, size_t num_cat, size_t encode_len)
-{
-	CategoryEncoder e(num_cat, encode_len);
-	return e.encode(category);
 }
 
 template <typename ShapeType>
@@ -184,6 +84,17 @@ std::vector<std::vector<size_t>> allPosition(const std::vector<size_t>& input_sh
 }
 
 template <typename T, typename Compare>
+void sort_permutation_no_alloc(
+    const std::vector<T>& vec, std::vector<size_t>& p,
+    Compare compare)
+{
+	assert(p.size() == vec.size());
+	std::iota(p.begin(), p.end(), 0);
+	std::sort(p.begin(), p.end(),
+		[&](std::size_t i, std::size_t j){ return compare(vec[i], vec[j]); });
+}
+
+template <typename T, typename Compare>
 inline std::vector<std::size_t> sort_permutation(
     const std::vector<T>& vec,
     Compare compare)
@@ -207,6 +118,31 @@ std::vector<T> apply_permutation(
 }
 
 template <typename T>
+void apply_permutation_in_place(
+    std::vector<T>& vec,
+    const std::vector<std::size_t>& p)
+{
+    std::vector<bool> done(vec.size());
+    for (std::size_t i = 0; i < vec.size(); ++i)
+    {
+        if (done[i])
+        {
+            continue;
+        }
+        done[i] = true;
+        std::size_t prev_j = i;
+        std::size_t j = p[i];
+        while (i != j)
+        {
+            std::swap(vec[prev_j], vec[j]);
+            done[j] = true;
+            prev_j = j;
+            j = p[j];
+        }
+    }
+}
+
+template <typename T>
 const T& ndIndexing(const xt::xarray<T>& arr,const std::vector<size_t>& idx)
 {
 	return arr.storage()[unfoldIndex(idx, arr.shape())];
@@ -227,6 +163,7 @@ struct Cells
 	{
 		connections_ = decltype(connections_)::from_shape(as<decltype(connections_)::shape_type>(cell_shape));
 		permence_ = decltype(permence_)::from_shape(as<decltype(permence_)::shape_type>(cell_shape));
+		sorted_ = xt::zeros<bool>(as<decltype(connections_)::shape_type>(cell_shape));
 	}
 
 	size_t size() const
@@ -246,11 +183,12 @@ struct Cells
 
 		if(connection_list.size() == max_connection_per_cell_) return;//throw std::runtime_error("Synapes are full in cells");
 		
+		sorted_[cell_pos] = false;
 		connection_list.push_back(input_pos);
 		permence_list.push_back(initial_permence);
 	}
 
-	xt::xarray<uint32_t> calcOverlap(const xt::xarray<bool>& x) const
+	xt::xarray<uint32_t> calcOverlap(const xt::xarray<bool>& x, float connected_thr) const
 	{
 		xt::xarray<uint32_t> res = xt::xarray<uint32_t>::from_shape(shape());
 
@@ -262,7 +200,7 @@ struct Cells
 			assert(connections.size() == permence.size());
 			uint32_t score = 0;
 			for(size_t j=0;j<connections.size();j++) {
-				if(permence[j] < 0.21)
+				if(permence[j] < connected_thr)
 					continue;
 				bool bit = x[connections[j]];
 				score += bit;
@@ -277,7 +215,7 @@ struct Cells
 		assert(connections_.size() == learn.size()); // A loose check for the same shape
 		auto clamp = [](float x) {return std::min(1.f, std::max(x, 0.f));};
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(guided)
 		for(size_t i=0;i<connections_.size();i++) {
 			if(learn[i] == false)
 				continue;
@@ -295,6 +233,7 @@ struct Cells
 		}
 	}
 
+	// After some testing seems the `learn` parameter be copied by value is faster.
 	void growSynapse(const xt::xarray<bool>& x, const xt::xarray<bool> learn, float perm_init)
 	{
 		assert(learn.size() == size()); //A loose check
@@ -305,6 +244,7 @@ struct Cells
 		}
 		if(all_on_bits.size() == 0)
 			return;
+		std::vector<std::vector<bool>> connection_lists(omp_get_max_threads(), std::vector<bool>(learn.size()));
 
 		#pragma omp parallel for schedule(guided) //TODO: guided might not be the best for cases with large amount of cells
 		for(size_t i=0;i<learn.size();i++) {
@@ -315,7 +255,13 @@ struct Cells
 			if(connections.size() == max_connection_per_cell_)
 				continue;
 
-			std::vector<bool> connection_list(learn.size());
+			//std::vector<bool> connection_list(learn.size());
+			auto& connection_list = connection_lists[omp_get_thread_num()];
+
+			#pragma omp simd
+			for(size_t i=0;i<connections.size();i++)
+					connection_list[i] = false;
+
 			for(size_t i=0;i<connections.size();i++)
 				connection_list[connections[i]] = true;
 
@@ -324,7 +270,9 @@ struct Cells
 					break;
 				if(connection_list[input] == true)
 					continue;
-				
+
+				//#pragma omp critical //No need to make it a critial session as we are modifing 
+				//                     //Different list of synapses every tiem. No race condition will occur
 				connect(input, i, perm_init);
 			}
 		}
@@ -334,14 +282,17 @@ struct Cells
 	{
 		assert(connections_.size() == permence_.size());
 
-		#pragma omp parallel for
+		#pragma omp parallel for schedule(guided)
 		for(size_t i=0;i<connections_.size();i++) {
+			if(sorted_[i] == false)
+				continue;
 			auto& connections = connections_[i];
 			auto& permence = permence_[i];
+			//Seems pre-allocating memory isn't very benifial
 			auto p = sort_permutation(connections, [](auto a, auto b){return a<b;});
-			connections = apply_permutation(connections, p);
-			permence = apply_permutation(permence, p);
-
+			apply_permutation_in_place(connections, p);
+			apply_permutation_in_place(permence, p);
+			sorted_[i] = true;
 		}
 	}
 
@@ -366,6 +317,7 @@ struct Cells
 
 	xt::xarray<std::vector<size_t>> connections_;
 	xt::xarray<std::vector<float>> permence_;
+	xt::xarray<bool> sorted_;
 	size_t max_connection_per_cell_;
 };
 
@@ -427,9 +379,6 @@ struct SpatialPooler
 			for(size_t j=0;j<potential_pool_connections;j++) {
 				connections[j] = all_input_cell[j];
 				permence[j] = clamp(dist(rng));
-
-				assert(connections.size() == permence.size());
-				assert(connections.size() == j+1);
 			}
 		}
 		cells_.sortSynapse();
@@ -437,25 +386,28 @@ struct SpatialPooler
 
 	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
 	{
-		xt::xarray<uint32_t> overlap_score = cells_.calcOverlap(x);
+		xt::xarray<uint32_t> overlap_score = cells_.calcOverlap(x, 0.21);
 		xt::xarray<bool> res = globalInhibition(overlap_score, global_density_);
 
 		if(learn == true)
-			cells_.learnCorrilation(x, res, permence_incerment_, permence_decerment_);
+			cells_.learnCorrilation(x, res, permanence_incerment_, permanence_decerment_);
 		return res;
 	}
 
 	Cells cells_;
 
 	//All the getter and seters
-	void setPermenceIncerment(float v) {permence_incerment_ = v;}
-	void setPermenceDecerment(float v) {permence_decerment_ = v;}
+	void setPermanenceIncerment(float v) {permanence_incerment_ = v;}
+	void setPermanenceDecerment(float v) {permanence_decerment_ = v;}
+	void setConnectedPermanence(float v) {connected_permanence_ = v;}
 
-	float getPermenceIncerment() const {return permence_incerment_;}
-	float getPermenceDecerment() const {return permence_decerment_;}
+	float permanenceIncerment() const {return permanence_incerment_;}
+	float permanenceDecerment() const {return permanence_decerment_;}
+	float connectedPermanence() const {return permanence_decerment_;}
 
-	float permence_incerment_ = 0.1f;
-	float permence_decerment_ = 0.1f;
+	float permanence_incerment_ = 0.1f;
+	float permanence_decerment_ = 0.1f;
+	float connected_permanence_ = 0.15;
 
 	float global_density_ = 0.15;
 };
@@ -471,7 +423,6 @@ xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x
 	for(size_t i=0;i<res.size()/column_size;i++) {
 		for(size_t j=0;j<column_size;j++)
 			res[i*column_size+j] = s[i*column_size+j];
-
 
 		if(x[i] == false)
 			continue;
@@ -529,13 +480,13 @@ struct TemporalMemory
 	xt::xarray<bool> compute(const xt::xarray<bool>& x, bool learn)
 	{
 		xt::xarray<bool> active_cells = applyBurst(predictive_cells_, x);
-		xt::xarray<uint32_t> overlap = cells_.calcOverlap(active_cells);
+		xt::xarray<uint32_t> overlap = cells_.calcOverlap(active_cells, connected_permanence_);
 		predictive_cells_ = (overlap > 2); //TODO: Arbitrary value
 		if(learn == true) {
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
 			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
-			cells_.learnCorrilation(last_active, apply_learning, permence_incerment_, permence_decerment_);
-			cells_.growSynapse(last_active, apply_learning, initial_permence_);
+			cells_.learnCorrilation(last_active, apply_learning, permanence_incerment_, permanence_decerment_);
+			cells_.growSynapse(last_active, apply_learning, initial_permanence_);
 		}
 		active_cells_ = active_cells;
 		return xt::sum(predictive_cells_, -1);
@@ -543,8 +494,8 @@ struct TemporalMemory
 
 	void reset()
 	{
-		predictive_cells_ = xt::zeros<bool>(cells_.shape());
-		active_cells_ = xt::zeros<bool>(cells_.shape());
+		predictive_cells_ = 0;
+		active_cells_ = 0;
 	}
 
 	void organizeSynapse()
@@ -553,15 +504,20 @@ struct TemporalMemory
 	}
 
 	//All the getter and seters
-	void setPermenceIncerment(float v) {permence_incerment_ = v;}
-	void setPermenceDecerment(float v) {permence_decerment_ = v;}
+	void setPermanenceIncerment(float v) {permanence_incerment_ = v;}
+	void setPermanenceDecerment(float v) {permanence_decerment_ = v;}
+	void setInitialPermanence(float v) {initial_permanence_ = v;}
+	void setConnectedPermanence(float v) {connected_permanence_ = v;}
 
-	float getPermenceIncerment() const {return permence_incerment_;}
-	float getPermenceDecerment() const {return permence_decerment_;}
+	float permanenceIncerment() const {return permanence_incerment_;}
+	float permanenceDecerment() const {return permanence_decerment_;}
+	float initialPermanence() const {return initial_permanence_;}
+	float connectedPermanence() const {return permanence_decerment_;}
 
-	float permence_incerment_ = 0.1f;
-	float permence_decerment_ = 0.1f;
-	float initial_permence_ = 0.5f;
+	float permanence_incerment_ = 0.1f;
+	float permanence_decerment_ = 0.1f;
+	float initial_permanence_ = 0.21f;
+	float connected_permanence_ = 0.15;
 
 	Cells cells_;
 	xt::xarray<bool> predictive_cells_;
@@ -616,3 +572,5 @@ protected:
 	std::vector<xt::xarray<int>> stored_patterns;
 	std::vector<size_t> pattern_sotre_num;
 };
+
+}
