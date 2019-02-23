@@ -484,7 +484,7 @@ struct TemporalMemory
 		predictive_cells_ = (overlap > 2); //TODO: Arbitrary value
 		if(learn == true) {
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
-			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
+			xt::xarray<bool> last_active = active_cells_;
 			cells_.learnCorrilation(last_active, apply_learning, permanence_incerment_, permanence_decerment_);
 			cells_.growSynapse(last_active, apply_learning, initial_permanence_);
 		}
