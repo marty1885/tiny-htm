@@ -422,7 +422,7 @@ xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x
 	#pragma omp parallel for
 	for(size_t i=0;i<res.size()/column_size;i++) {
 		for(size_t j=0;j<column_size;j++)
-			res[i*column_size+j] = s[i*column_size+j];
+			res[i*column_size+j] = x[i]&&s[i*column_size+j];
 
 		if(x[i] == false)
 			continue;
@@ -494,8 +494,8 @@ struct TemporalMemory
 
 	void reset()
 	{
-		predictive_cells_ = 0;
-		active_cells_ = 0;
+		predictive_cells_ *= 0;
+		active_cells_ *= 0;
 	}
 
 	void organizeSynapse()
