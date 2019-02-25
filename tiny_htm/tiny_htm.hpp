@@ -422,7 +422,7 @@ xt::xarray<bool> applyBurst(const xt::xarray<bool>& s, const xt::xarray<bool>& x
 	#pragma omp parallel for
 	for(size_t i=0;i<res.size()/column_size;i++) {
 		for(size_t j=0;j<column_size;j++)
-			res[i*column_size+j] = s[i*column_size+j];
+			res[i*column_size+j] = x[i]&&s[i*column_size+j];
 
 		if(x[i] == false)
 			continue;
@@ -484,7 +484,7 @@ struct TemporalMemory
 		predictive_cells_ = (overlap > 2); //TODO: Arbitrary value
 		if(learn == true) {
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
-			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
+			xt::xarray<bool> last_active = active_cells_;
 			cells_.learnCorrilation(last_active, apply_learning, permanence_incerment_, permanence_decerment_);
 			cells_.growSynapse(last_active, apply_learning, initial_permanence_);
 		}
@@ -494,8 +494,8 @@ struct TemporalMemory
 
 	void reset()
 	{
-		predictive_cells_ = 0;
-		active_cells_ = 0;
+		predictive_cells_ *= 0;
+		active_cells_ *= 0;
 	}
 
 	void organizeSynapse()
