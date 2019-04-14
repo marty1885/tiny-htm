@@ -78,7 +78,7 @@ std::vector<std::vector<size_t>> allPosition(const std::vector<size_t>& input_sh
 	for(auto l : input_shape)
 		vol *= l;
 	res.reserve(vol);
-	
+
 	_allPosition(0, input_shape, {}, res);
 	return res;
 }
@@ -182,7 +182,7 @@ struct Cells
 		auto& permence_list = permence_[cell_pos];
 
 		if(connection_list.size() == max_connection_per_cell_) return;//throw std::runtime_error("Synapes are full in cells");
-		
+
 		sorted_[cell_pos] = false;
 		connection_list.push_back(input_pos);
 		permence_list.push_back(initial_permence);
@@ -271,7 +271,7 @@ struct Cells
 				if(connection_list[input] == true)
 					continue;
 
-				//#pragma omp critical //No need to make it a critial session as we are modifing 
+				//#pragma omp critical //No need to make it a critial session as we are modifing
 				//                     //Different list of synapses every tiem. No race condition will occur
 				connect(input, i, perm_init);
 			}
@@ -336,7 +336,7 @@ xt::xarray<bool> globalInhibition(const xt::xarray<uint32_t>& x, float density)
 	#pragma omp parallel for
 	for(size_t i=0;i<res.size();i++)
 		res[i] = false;
-	uint32_t min_accept_val = v[std::min(target_size, v.size())].first;
+	uint32_t min_accept_val = v[std::min(target_size, v.size()-1)].first;
 	auto it = std::upper_bound(v.begin(), v.end(), min_accept_val, [](const auto& a, const auto& b){return a > b.first;});
 	size_t stop_index = std::distance(v.begin(), it);
 
@@ -361,7 +361,7 @@ struct SpatialPooler
 	{
 		if(potential_pool_pct > 1 or potential_pool_pct < 0)
 			throw std::runtime_error("potential_pool_pct must be between 0~1, but get" + std::to_string(potential_pool_pct));
-		
+
 		//Initalize potential pool
 		std::mt19937 rng(seed);
 		size_t input_cell_num = std::accumulate(input_shape.begin(), input_shape.end(), 1, std::multiplies<size_t>());
@@ -484,7 +484,7 @@ struct TemporalMemory
 		predictive_cells_ = (overlap > 2); //TODO: Arbitrary value
 		if(learn == true) {
 			xt::xarray<bool> apply_learning = selectLearningCell(active_cells);
-			xt::xarray<bool> last_active = active_cells_;
+			xt::xarray<bool> last_active = selectLearningCell(active_cells_);
 			cells_.learnCorrilation(last_active, apply_learning, permanence_incerment_, permanence_decerment_);
 			cells_.growSynapse(last_active, apply_learning, initial_permanence_);
 		}
